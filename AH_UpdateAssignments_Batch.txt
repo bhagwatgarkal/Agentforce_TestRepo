@@ -1,6 +1,6 @@
 /****************************************************************************************
 Name            : AH_UpdateAssignments_Batch Class
-                :
+          
 ******************************************************************************************/
 global class AH_UpdateAssignments_Batch implements Database.Batchable <sObject>, Database.AllowsCallouts, Database.Stateful 
 {
@@ -92,3 +92,4 @@ global class AH_UpdateAssignments_Batch implements Database.Batchable <sObject>,
     
 
 }
+
