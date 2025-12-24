@@ -1,11 +1,5 @@
 /****************************************************************************************
 Name            : AH_PCC_OpportunityDetails_Ctlr Class
-Author          : Sean Harris
-Created Date    : 03/31/2019
-Last Mod Date   : 03/31/2019
-Last Mod By     : Sean Harris
-NICC Reference  : NICC-033935
-Description     : Controller for the AH_PCC_OpportunityDetails Visualforce page.
                 : 
 ******************************************************************************************/
 public class AH_PCC_OpportunityDetails_Ctlr 
@@ -428,4 +422,5 @@ system.debug('usdpb price ' + usdpb.UnitPrice );
         
     }   
    
+
 }
