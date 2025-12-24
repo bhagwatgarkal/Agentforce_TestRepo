@@ -1,12 +1,5 @@
 /****************************************************************************************
 Name            : AH_UpdateAssignments_Batch Class
-Author          : Shashikant Nikam
-Created Date    : 06/15/2020
-Last Mod Date   : 04/11/2025
-Last Mod By     : Bhagwat Garkal
-NICC Reference  :
-Description     : Batch class to update assignments only when Assignment is inserted 
-        : 
                 :
 ******************************************************************************************/
 global class AH_UpdateAssignments_Batch implements Database.Batchable <sObject>, Database.AllowsCallouts, Database.Stateful 
@@ -97,4 +90,5 @@ global class AH_UpdateAssignments_Batch implements Database.Batchable <sObject>,
         
     }
     
+
 }
