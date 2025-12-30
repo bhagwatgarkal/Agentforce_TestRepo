@@ -1,0 +1,95 @@
+/****************************************************************************************
+Name            : AH_UpdateAssignments_Batch Class
+          
+******************************************************************************************/
+global class AH_UpdateAssignments_Batch implements Database.Batchable <sObject>, Database.AllowsCallouts, Database.Stateful 
+{
+
+    Set<Id> assignmentIds = new Set<Id>();
+    String strApexJobName = '';
+    
+    public AH_UpdateAssignments_Batch(Set<Id> asmntId, String sJobName)
+    {
+        assignmentIds.addAll(asmntId);
+        system.debug('in batch constructor..assignmentIds : ' + assignmentIds);
+        strApexJobName = sJobName;
+    }
+    
+    global Database.QueryLocator start (Database.BatchableContext bc)
+    {
+        
+        String retQuery = 'SELECT Id, ' +
+            'pse__Project_Task__c, ' +
+            'pse__Project_Task__r.Name, ' +
+            'pse__Project_Task__r.Billable__c, ' +
+            'pse__Project_Task__r.Location__c, ' +
+            'pse__Project_Task__r.pse__Milestone__c, ' +
+            'pse__Project_Task__r.Time_Credited__c, ' +
+            'pse__Project_Task__r.pse__Status__c, ' +
+            'pse__Assignment__r.Id, ' +
+            'pse__Assignment__r.Name, ' +
+            'pse__Assignment__r.pse__Location__c, ' +
+            'pse__Assignment__r.pse__Milestone__c, ' +
+            'pse__Assignment__r.pse__Time_Credited__c, ' +
+            'pse__Assignment__r.isInsertCompleted__c ' +
+            'FROM pse__Project_Task_Assignment__c ' +
+            'WHERE pse__Assignment__r.isInsertCompleted__c = true ' +
+            'AND pse__Assignment__c IN : assignmentIds';
+           
+        system.debug('Query = ' + retQuery);
+        
+        return Database.getQueryLocator(retQuery);
+        
+    }
+    
+    global void execute (Database.BatchableContext bc1, List<pse__Project_Task_Assignment__c> projectTaskassignmentLst)
+    {
+        
+        List<pse__Assignment__c> assignmentList = new List<pse__Assignment__c>();
+        
+        for (pse__Project_Task_Assignment__c taskAssignmentObj : projectTaskassignmentLst)
+        {
+            if (taskAssignmentObj.pse__Project_Task__c != NULL && taskAssignmentObj.pse__Assignment__c != NULL)
+            {
+                pse__Assignment__c assignment = new pse__Assignment__c(Id = taskAssignmentObj.pse__Assignment__r.Id);
+                assignment.Name = taskAssignmentObj.pse__Project_Task__r.Name;
+                assignment.pse__Location__c = taskAssignmentObj.pse__Project_Task__r.Location__c;
+                assignment.pse__Is_Billable__c = taskAssignmentObj.pse__Project_Task__r.Billable__c;
+                assignment.pse__Milestone__c = taskAssignmentObj.pse__Project_Task__r.pse__Milestone__c;
+                assignment.pse__Time_Credited__c = taskAssignmentObj.pse__Project_Task__r.Time_Credited__c;
+                assignment.pse__Status__c = taskAssignmentObj.pse__Project_Task__r.pse__Status__c;
+                assignment.isInsertCompleted__c = false;                
+                assignmentList.add(assignment);
+            }
+        }
+        
+        if (!assignmentList.isEmpty())
+        {
+            system.debug('Updating assignments. assignmentList = ' + assignmentList);
+            Database.update(assignmentList);
+        }
+        
+    }
+    
+    global void finish (Database.BatchableContext bc) 
+    {
+
+        if (!Test.isRunningTest())
+        {
+            try 
+            {
+                CronTrigger job = [SELECT Id, CronJobDetail.Name FROM CronTrigger WHERE CronJobDetail.Name =: strApexJobName];
+                system.debug('Aborting scheduled job..');
+                System.abortJob(job.Id);
+            }
+            catch (Exception e)
+            {
+                system.debug('Exception occured while aborting scheduled Job..' + e);
+            }
+        }
+        
+    }
+    
+
+}
+
