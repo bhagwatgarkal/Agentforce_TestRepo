@@ -1,5 +1,6 @@
 /****************************************************************************************
 Name            : AH_UpdateAssignments_Batch Class
+This class is used for test the Agentforce intgration
           
 ******************************************************************************************/
 global class AH_UpdateAssignments_Batch implements Database.Batchable <sObject>, Database.AllowsCallouts, Database.Stateful 
@@ -92,4 +93,5 @@ global class AH_UpdateAssignments_Batch implements Database.Batchable <sObject>,
     
 
 }
+
 
