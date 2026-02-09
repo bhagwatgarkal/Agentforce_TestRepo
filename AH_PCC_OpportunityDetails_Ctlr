@@ -1,6 +1,6 @@
 /****************************************************************************************
 Name            : AH_PCC_OpportunityDetails_Ctlr Class
-                : 
+                : Test Class
 ******************************************************************************************/
 public class AH_PCC_OpportunityDetails_Ctlr 
 {
@@ -424,3 +424,4 @@ system.debug('usdpb price ' + usdpb.UnitPrice );
    
 
 }
+
