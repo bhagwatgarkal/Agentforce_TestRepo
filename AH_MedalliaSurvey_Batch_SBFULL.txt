@@ -1,0 +1,1288 @@
+/***********************************************************************************************
+Name            : AH_MedalliaSurvey_Batch
+Author          : Bhagwat Garkal
+Created Date    : 04/26/2022
+Last Mod Date   : 09/12/2022
+Last Mod By     : Bhagwat Garkal
+NICC Reference  : 
+Description     : Create survey records based on Selection Criteria.  
+:
+:
+************************************************************************************************/
+global class AH_MedalliaSurvey_Batch implements Database.Batchable<sObject>,Database.Stateful
+{
+    @testvisible private String query;
+    @testvisible private String sObjectType;
+    @testvisible private String surveyType;
+    @testvisible private String surveySubType;
+    @testvisible private String recordType;
+    @testvisible private Integer numberOfDaysForSupport = 0;
+    @testvisible private Integer numberOfDaysForAdoption = 0;
+    @testvisible private Integer numberOfDaysForService = 0;
+    @testvisible private boolean bFail;
+    @testvisible private Date fromEndDate;
+    @testvisible private Date toEndDate;
+    global Set<Id> failureIdsSet;
+    global Set<Id> successIdsSet;
+    
+    
+    global AH_MedalliaSurvey_Batch()
+    {
+        this.bFail = false;
+    }
+    
+    global AH_MedalliaSurvey_Batch(String recordType, String surveyType,String surveySubType)
+    {
+        
+        this.bFail = false;
+        this.sObjectType = sObjectType;
+        
+        if (recordType != null)
+        {
+            this.recordType = recordType;
+        }
+        
+        if (surveyType != null)
+        {
+            this.surveyType = surveyType;
+        }
+        
+        if (surveySubType != null)
+        {
+            this.surveySubType = surveySubType;
+        }
+    }
+    
+    global AH_MedalliaSurvey_Batch(String recordType, String surveyType,String surveySubType,Date fromEndDate, Date toEndDate)
+    {
+        
+        this.bFail = false;
+        this.sObjectType = sObjectType;
+        
+        if (recordType != null)
+        {
+            this.recordType = recordType;
+        }
+        
+        if (surveyType != null)
+        {
+            this.surveyType = surveyType;
+        }
+        
+        if (surveySubType != null)
+        {
+            this.surveySubType = surveySubType;
+        }
+        
+        if(fromEndDate != null)
+        {
+            this.fromEndDate = fromEndDate;
+            System.debug('fromEndDate==>'+this.fromEndDate);
+        }
+        
+        if(toEndDate != null)
+        {
+            this.toEndDate = toEndDate;
+            System.debug('fromEndDate==>'+this.toEndDate);
+        }
+    }
+    
+    global Database.QueryLocator start(Database.BatchableContext bc)
+    {
+        
+        String supportSurveySOQL = 'SELECT Id,';
+        String supportSOQLWhere = 'WHERE ';
+        
+        if (this.recordType == 'Support_Selection_Criteria' || this.recordType == 'Solution_Adoption')
+        {
+            supportSurveySOQL +='Origin,Reason,Case_Reason__c,Question_Type__c,AssetId,Asset.Name,CaseNumber,ContactId,Status,Support_Tier_Designation__c,Support_Tier_Designation__r.Inactive__c,Account_Name__c,Contact.Name,';
+            supportSurveySOQL +='AccountId,Type,Account.Type,RecordType.Name,Contact.Spt_Survey_Opt_Out__c,Account.Spt_Survey_Opt_Out__c,No_Survey__c,Contact.Title,';
+            supportSurveySOQL +='Contact.Salutation,Contact.FirstName,Contact.LastName,Account.Name,Account.Management_Company_Name__c,Account.Franchisor__c,Account.Brand__c,Contact.MailingAddress,';
+            supportSurveySOQL +='Contact.Phone,Contact.Email,OwnerId,Owner.Name,Subject,Deployment_Instance_History_Record__c,Priority,Customer_Severity__c,CreatedDate,Deployment_Instance_History_Record__r.Name,';
+            supportSurveySOQL +='ClosedDate,Solution_Domain__c,SupportRegion__c,Contact.MailingStreet,Contact.MailingCity,Contact.MailingCountry,Contact.MailingState,Contact.MailingPostalCode,';
+            supportSurveySOQL +='Project__c,Project__r.pse__Group__c,Project__r.pse__Group__r.Name,Project__r.Survey_Sent__c,Solution_Adoption_Start_Date__c,DI_Product_Group__c,';
+            supportSurveySOQL +='Support_Tier__c,Support_Tier_Designation_Region__c,Case_Product_Line__c,Module__c,Component__c,Product_Group__c,Actual_time__c,Appointment_Booked_Email_Received__c,Level_1_Tier__c ';
+            supportSurveySOQL += 'FROM Case ';
+            
+            supportSOQLWhere += ' ContactId != null AND AccountId != null AND Contact.Spt_Survey_Opt_Out__c = false AND Account.Spt_Survey_Opt_Out__c = false AND No_Survey__c = false AND Survey_Invite_Sent__c = false'; 
+        }
+        
+        if (this.recordType == 'Service_Selection_Criteria')
+        {   
+            supportSurveySOQL +='Name,pse__Project__c,pse__Project__r.Name,pse__Project__r.Id,pse__Project__r.Customer_Project_Contact__r.Id,pse__Project__r.pse__Project_ID__c,pse__Milestone__c,pse__Milestone__r.Name,pse__Milestone__r.Milestone_Type__c,pse__Milestone__r.Id,Resource_Practice_Name__c,pse__Project__r.Opportunity_Number__c,';
+            supportSurveySOQL +='pse__Assignment_Number__c,Contact_Name__c,Contact_Name__r.Id,Contact_Name__r.Name,Contact_Name__r.Title,Contact_Name__r.Salutation,Contact_Name__r.FirstName,Contact_Name__r.LastName,Contact_Name__r.Email,';
+            supportSurveySOQL +='Contact_Name__r.MailingAddress,Contact_Name__r.MailingStreet,Contact_Name__r.MailingCity,Contact_Name__r.MailingCountry,Contact_Name__r.MailingState,Contact_Name__r.MailingPostalCode,';
+            supportSurveySOQL +='Contact_Name__r.Phone,Contact_Name__r.Primary_Language__c, Contact_Name__r.AccountId, Contact_Name__r.Account.Name,Contact_Name__r.Account.AccountNumber,Contact_Name__r.Account.Spt_Survey_Opt_Out__c,';
+            supportSurveySOQL +='Contact_Name__r.Account.Brand__c,Contact_Name__r.Account.Franchisor__c,pse__Project__r.pse__Region__c,pse__Project__r.pse__Region__r.Name,pse__Project__r.pse__Group__c,pse__Project__r.pse__Group__r.Name,';
+            supportSurveySOQL +='pse__Start_Date__c,pse__End_Date__c ,pse__Resource__c,pse__Resource__r.Name,pse__Status__c,pse__Role__c,pse__Milestone__r.pse__Override_Project_Practice__c,pse__Milestone__r.pse__Override_Project_Practice__r.Name,';
+            supportSurveySOQL +='pse__Project__r.pse__End_Date__c, pse__Project__r.Customer_Project_Contact__r.AccountId,pse__Project__r.Customer_Project_Contact__r.Account.Name,pse__Project__r.Customer_Project_Contact__r.Account.AccountNumber,pse__Project__r.Customer_Project_Contact__r.Account.Brand__c,';
+            supportSurveySOQL +='pse__Project__r.Customer_Project_Contact__r.MailingAddress,pse__Project__r.Customer_Project_Contact__r.MailingCity,pse__Project__r.Customer_Project_Contact__r.MailingCountry,pse__Project__r.Customer_Project_Contact__r.Phone,';
+            supportSurveySOQL +='pse__Project__r.Customer_Project_Contact__r.MailingState,pse__Project__r.Customer_Project_Contact__r.MailingPostalCode,pse__Project__r.Customer_Project_Contact__r.Email,pse__Project__r.Customer_Project_Contact__r.FirstName,';
+            supportSurveySOQL +='pse__Project__r.Customer_Project_Contact__r.LastName,pse__Project__r.pse__Stage__c,pse__Project__r.Customer_Project_Contact__r.Title,pse__Project__r.Customer_Project_Contact__r.Account.Franchisor__c,pse__Project__r.Customer_Project_Contact__r.Primary_Language__c,';
+            supportSurveySOQL +='Project_Manager__c,Project_Manager__r.Name';
+            supportSurveySOQL +=' FROM pse__Assignment__c ';
+        }
+        
+        List<Medallia_Selection_Criteria__c> serviceCriterialst = new List<Medallia_Selection_Criteria__c>();
+        
+        if (this.surveyType != null && this.surveySubType != null)
+        {
+            serviceCriterialst = [Select Id,Type__c,Days_between_Surveys__c,Number_of_Days__c,Active__c,Case_Origin__c,Case_Reason__c,Restricted_Emails__c,Assignment_Status__c,
+                                  Case_Status__c,Case_Type__c,Credit_Status__c,Project_Type__c,Role__c,Override_Project_Practice__c,Group__c,Assignment_Name__c,
+                                  Milestone_Type__c,Project_Object__c,Project_Record__c,Record_Type__c,Support_Tier__c,Project_Stage__c,
+                                  RecordType.Name,RecordType.DeveloperName, SurveyType__c,SurveySubType__c from Medallia_Selection_Criteria__c 
+                                  where Active__c = true AND RecordType.DeveloperName =: this.recordType AND SurveyType__c =: this.surveyType AND SurveySubType__c =: this.surveySubType];    
+        }
+        else if(this.surveyType != null)
+        {
+            serviceCriterialst = [Select Id,Type__c,Days_between_Surveys__c,Number_of_Days__c,Active__c,Case_Origin__c,Case_Reason__c,Restricted_Emails__c,Assignment_Status__c,
+                                  Case_Status__c,Case_Type__c,Credit_Status__c,Project_Type__c,Role__c,Override_Project_Practice__c,Group__c,Assignment_Name__c,
+                                  Milestone_Type__c,Project_Object__c,Project_Record__c,Record_Type__c,Support_Tier__c,Project_Stage__c,
+                                  RecordType.Name,RecordType.DeveloperName, SurveyType__c,SurveySubType__c from Medallia_Selection_Criteria__c 
+                                  where Active__c = true AND RecordType.DeveloperName =: this.recordType AND SurveyType__c =: this.surveyType];
+        }    
+        else
+        {
+            serviceCriterialst = [Select Id,Type__c,Days_between_Surveys__c,Number_of_Days__c,Active__c,Case_Origin__c,Case_Reason__c,Restricted_Emails__c,Assignment_Status__c,
+                                  Case_Status__c,Case_Type__c,Credit_Status__c,Project_Type__c,Role__c,Override_Project_Practice__c,Group__c,Assignment_Name__c,
+                                  Milestone_Type__c,Project_Object__c,Project_Record__c,Record_Type__c,Support_Tier__c,Project_Stage__c,
+                                  RecordType.Name,RecordType.DeveloperName, SurveyType__c,SurveySubType__c from Medallia_Selection_Criteria__c 
+                                  where Active__c = true AND RecordType.DeveloperName =: this.recordType];    
+        }
+        
+        //System.debug('serviceCriterialst==>'+serviceCriterialst);
+        
+        if (!serviceCriterialst.isEmpty())
+        {
+            for (Medallia_Selection_Criteria__c serviceCriteria : serviceCriterialst)
+            {
+                
+                if (serviceCriteria != null && serviceCriteria.RecordType.DeveloperName == 'Support_Selection_Criteria')
+                {
+                    List<String> creditStatus = getListOfValues(serviceCriteria.Credit_Status__c);
+                    List<String> caseReason = getListOfValues(serviceCriteria.Case_Reason__c);
+                    List<String> caseType = getListOfValues(serviceCriteria.Case_Type__c);
+                    Set<String> restrictedEmails = getRestrictedEmailDomain(serviceCriteria.Restricted_Emails__c.Trim());
+                    List<String> supportTier = getListOfValues(serviceCriteria.Support_Tier__c);
+                    
+                    if(serviceCriteria.Days_between_Surveys__c != null)
+                        numberOfDaysForSupport = serviceCriteria.Days_between_Surveys__c.intValue();
+                    
+                    supportSOQLWhere += ' AND RecordType.Name =\'' + String.escapeSingleQuotes(serviceCriteria.Record_Type__c) + '\' AND Status =\'' + String.escapeSingleQuotes(serviceCriteria.Case_Status__c)+'\'';
+                    supportSOQLWhere += ' AND Support_Tier_Designation__c != null AND Support_Tier_Designation__r.Inactive__c = false AND Account.Type = \'' + serviceCriteria.Type__c + '\'';// AND Support_Tier__c != null AND Support_Tier__c LIKE \''+'%'+String.escapeSingleQuotes(serviceCriteria.Support_Tier__c) +'%\'';
+                   
+                    if (!creditStatus.IsEmpty())
+                    {
+                        supportSOQLWhere += ' AND Credit_Status__c NOT IN : creditStatus';
+                    }
+                    
+                    if (!caseReason.IsEmpty())
+                    {
+                        supportSOQLWhere += ' AND Case_Reason__c != null AND Case_Reason__c IN :caseReason';
+                    }
+                    
+                    if (!supportTier.IsEmpty())
+                    {
+                        supportSOQLWhere += ' AND Support_Tier__c != null AND Support_Tier__c IN :supportTier';
+                    }
+                    
+                    if (!restrictedEmails.IsEmpty())
+                    {
+                        supportSOQLWhere += ' AND Contact.FirstName != null AND Contact.Email != null AND (NOT Contact.Email LIKE : restrictedEmails)';
+                    }
+                    
+                    if (!caseType.IsEmpty())
+                    {
+                        supportSOQLWhere +=' AND Type != null AND Type IN :caseType';
+                    }
+                    
+                    supportSOQLWhere += ' AND (Origin != \'Trainer\' OR  Origin != \'OnSite\') AND Survey_Invite_Sent__c = false and ClosedDate = LAST_N_DAYS:'+serviceCriteria.Number_of_Days__c;// AND  ClosedDate > 2022-05-14T00:00:00Z and ClosedDate < 2022-05-31T00:00:00Z limit 10
+                }
+                
+                if (serviceCriteria.RecordType.DeveloperName == 'Solution_Adoption')
+                {   
+                    if(serviceCriteria.Days_between_Surveys__c != null)
+                        numberOfDaysForAdoption = serviceCriteria.Days_between_Surveys__c.intValue();
+                    supportSOQLWhere += ' AND Appointment_Booked_Email_Received__c = true AND RecordType.Name =\''+serviceCriteria.Record_Type__c+'\' AND Status =\''+serviceCriteria.Case_Status__c+'\'';
+                    supportSOQLWhere += ' AND ClosedDate = LAST_N_DAYS:'+serviceCriteria.Number_of_Days__c;//+serviceCriteria.Number_of_Days__c;//N_DAYS_AGO:7
+                }
+                
+                if (serviceCriteria.RecordType.DeveloperName == 'Service_Selection_Criteria')
+                {  
+                    if (serviceCriteria.SurveyType__c == 'Services - Installer Survey')
+                    {
+                        
+                        //BELOW VARIABLE IS CONTAINS MULTISELECT PICKLIST VALUE
+                        Set<String> installerRstrictedEmails = getRestrictedEmailDomain(serviceCriteria.Restricted_Emails__c);
+                        List<String> installergroupName = getListOfValues(serviceCriteria.Group__c.Trim());
+                        List<String> installerRoles = getListOfValues(serviceCriteria.Role__c.Trim());
+                        List<String> installerAssignmentStatus = getListOfValues(serviceCriteria.Assignment_Status__c.Trim());
+                        List<String> installerMilestoneType = getListOfValues(serviceCriteria.Milestone_Type__c.Trim());
+                        
+                        Date enddateInstaller = Date.valueOf(Datetime.now().addDays(- Integer.valueOf(serviceCriteria.Number_of_Days__c)).formatGmt('yyyy-MM-dd'));
+                        
+                        if (serviceCriteria.Days_between_Surveys__c != null)
+                        {
+                            numberOfDaysForService = serviceCriteria.Days_between_Surveys__c.intValue();
+                        }
+
+                        supportSOQLWhere += ' pse__Project__c != null AND (Contact_Name__c != null OR pse__Project__r.Customer_Project_Contact__c != null)';
+                        supportSOQLWhere += ' AND pse__Project__r.pse__Project_Type__c = \''+serviceCriteria.Project_Type__c+'\'';// AND pse__Status__c = \''+serviceCriteria.Assignment_Status__c+'\'
+                        supportSOQLWhere += ' AND Survey_Sent__c = false AND pse__Project__r.Survey_Sent__c = false And pse__Is_Billable__c = true And pse__Milestone__c != null';// AND pse__Milestone__r.Milestone_Type__c = \''+serviceCriteria.Milestone_Type__c+'\'
+                        supportSOQLWhere += ' AND pse__Project__r.Customer_Project_Contact__r.FirstName != null AND pse__Project__r.Customer_Project_Contact__r.Status__c = \'Active\' AND pse__Project__r.Customer_Project_Contact__r.Bounced_Email__c = false'; 
+                        supportSOQLWhere += ' AND Contact_Name__r.Account.Spt_Survey_Opt_Out__c = false';
+                        supportSOQLWhere += ' AND pse__End_Date__c IN (:enddateInstaller)';
+                        
+                        if (!installerAssignmentStatus.IsEmpty())
+                        {
+                            supportSOQLWhere += ' AND pse__Status__c IN : installerAssignmentStatus';
+                        }
+                        
+                        if (!installerMilestoneType.IsEmpty())
+                        {
+                            supportSOQLWhere += ' AND pse__Milestone__c IN : installerMilestoneType';
+                        }
+                        
+                        if (!installerRoles.IsEmpty())
+                        {
+                            supportSOQLWhere += ' AND pse__Role__c IN : installerRoles';
+                        }
+                        
+                        if (!installergroupName.IsEmpty())
+                        {
+                            supportSOQLWhere += ' AND pse__Project__r.pse__Group__c != null AND pse__Project__r.pse__Group__r.Name != null AND pse__Project__r.pse__Group__r.Name IN : installergroupName ';
+                        }
+                        
+                        if (!installerRstrictedEmails.IsEmpty())
+                        {
+                            supportSOQLWhere += ' AND (NOT pse__Project__r.Customer_Project_Contact__r.Email LIKE : installerRstrictedEmails)';
+                        }
+                    }
+                    
+                    if (serviceCriteria.SurveyType__c == 'Services - Consulting Survey')
+                    {
+                        if (serviceCriteria.Days_between_Surveys__c != null)
+                        {
+                            numberOfDaysForService = serviceCriteria.Days_between_Surveys__c.intValue();
+                        }
+                            
+                        Set<String> consultantsrestrictedEmails = getRestrictedEmailDomain(serviceCriteria.Restricted_Emails__c);
+                        List<String> consultantsgroupName = getListOfValues(serviceCriteria.Group__c);
+                        List<String> consultantsRoles = getListOfValues(serviceCriteria.Role__c.Trim());
+                        List<String> consultantAssignmentStatus = getListOfValues(serviceCriteria.Assignment_Status__c.Trim());
+                        List<String> consultantMilestoneType = getListOfValues(serviceCriteria.Milestone_Type__c.Trim());
+                        
+                        Date enddateConsulting = Date.valueOf(Datetime.now().addDays(- Integer.valueOf(serviceCriteria.Number_of_Days__c)).formatGmt('yyyy-MM-dd'));
+                        
+                        supportSOQLWhere += ' pse__End_Date__c IN (:enddateConsulting)';//pse__Status__c = \'' + serviceCriteria.Assignment_Status__c + '\' AND
+                        supportSOQLWhere += ' AND (Contact_Name__c != null OR pse__Project__r.Customer_Project_Contact__c != null)';
+                        supportSOQLWhere += ' AND pse__Milestone__r.pse__Override_Project_Practice__r.Name = \''+serviceCriteria.Override_Project_Practice__c+'\'';
+                        supportSOQLWhere += ' AND pse__Project__r.pse__Project_Type__c = \''+serviceCriteria.Project_Type__c+'\'';// AND pse__End_Date__c = LAST_N_DAYS:3
+                        supportSOQLWhere += ' AND Survey_Sent__c = false AND pse__Project__r.Survey_Sent__c = false And pse__Is_Billable__c = true';
+                        supportSOQLWhere += ' AND pse__Project__r.Customer_Project_Contact__r.Status__c = \'Active\' AND pse__Project__r.Customer_Project_Contact__r.Bounced_Email__c = false';
+                        supportSOQLWhere += ' AND Contact_Name__r.Account.Spt_Survey_Opt_Out__c = false';
+                        
+                        if (!consultantAssignmentStatus.IsEmpty())
+                        {
+                            supportSOQLWhere += ' AND pse__Status__c IN :consultantAssignmentStatus';
+                        }
+                        
+                        if (!consultantMilestoneType.IsEmpty())
+                        {
+                            supportSOQLWhere += ' AND pse__Milestone__r.Milestone_Type__c IN :consultantMilestoneType';
+                        }
+                        
+                        if (!consultantsRoles.IsEmpty())
+                        {
+                            supportSOQLWhere += ' AND pse__Role__c IN :consultantsRoles';
+                        }
+                        
+                        if (!consultantsgroupName.IsEmpty())
+                        {
+                            supportSOQLWhere += ' AND pse__Project__r.pse__Group__r.Name IN : consultantsgroupName';
+                        }
+                        
+                        if (!consultantsrestrictedEmails.IsEmpty())
+                        {
+                            supportSOQLWhere += ' AND (NOT pse__Project__r.Customer_Project_Contact__r.Email LIKE : consultantsrestrictedEmails)';
+                        }
+                    }
+                    
+                    if (serviceCriteria.SurveyType__c == 'Services - Training Survey')
+                    {
+                        if (serviceCriteria.Days_between_Surveys__c != null)
+                        {
+                            numberOfDaysForService = serviceCriteria.Days_between_Surveys__c.intValue();
+                        }
+
+                        Set<String> trainingRestrictedEmails = getRestrictedEmailDomain(serviceCriteria.Restricted_Emails__c);
+                        List<String> traininggroupName = getListOfValues(serviceCriteria.Group__c);
+                        List<String> trainingRoles = getListOfValues(serviceCriteria.Role__c.Trim());
+                        List<String> trainingAssignmentStatus = getListOfValues(serviceCriteria.Assignment_Status__c.Trim());
+                        List<String> trainingMilestoneType = getListOfValues(serviceCriteria.Milestone_Type__c.Trim());
+                        
+                        Date enddateTraining = Date.valueOf(Datetime.now().addDays(- Integer.valueOf(serviceCriteria.Number_of_Days__c)).formatGmt('yyyy-MM-dd'));
+
+                        supportSOQLWhere += ' pse__End_Date__c IN (:enddateTraining)';//pse__Status__c = \''+serviceCriteria.Assignment_Status__c+'\' AND
+                        supportSOQLWhere += ' AND (Contact_Name__c != null OR pse__Project__r.Customer_Project_Contact__c != null)';
+                        supportSOQLWhere += ' AND pse__Milestone__r.pse__Override_Project_Practice__r.Name = \''+serviceCriteria.Override_Project_Practice__c+'\'';
+                        supportSOQLWhere += ' AND Survey_Sent__c = false AND pse__Project__r.Survey_Sent__c = false And pse__Is_Billable__c = true';//And pse__Milestone__r.Milestone_Type__c = \''+serviceCriteria.Milestone_Type__c+'\'
+                        supportSOQLWhere += ' AND pse__Project__r.pse__Project_Type__c = \''+serviceCriteria.Project_Type__c+'\'';
+                        supportSOQLWhere += ' AND pse__Project__r.Customer_Project_Contact__r.Status__c = \'Active\' AND pse__Project__r.Customer_Project_Contact__r.Bounced_Email__c = false';
+                        supportSOQLWhere += ' AND Contact_Name__r.Account.Spt_Survey_Opt_Out__c = false AND ((NOT Name LIKE \'webinar\') OR (NOT Name LIKE \'solution adoption\'))';
+                        
+                        if (!trainingAssignmentStatus.IsEmpty())
+                        {
+                            supportSOQLWhere += ' AND pse__Status__c IN : trainingAssignmentStatus';
+                        }
+                        
+                        if (!trainingMilestoneType.IsEmpty())
+                        {
+                            supportSOQLWhere += ' AND pse__Milestone__r.Milestone_Type__c IN : trainingMilestoneType';
+                        }
+                        
+                        if (!trainingRoles.IsEmpty())
+                        {
+                            supportSOQLWhere += ' AND pse__Role__c IN : trainingRoles';
+                        }
+                        
+                        if (!traininggroupName.IsEmpty())
+                        {
+                            supportSOQLWhere += ' AND pse__Project__r.pse__Group__r.Name IN : traininggroupName';
+                        }
+                        
+                        if (!trainingRestrictedEmails.IsEmpty())
+                        {
+                            supportSOQLWhere += ' AND (NOT pse__Project__r.Customer_Project_Contact__r.Email LIKE : trainingRestrictedEmails)';
+                        } 
+                    }
+                    
+                    if (serviceCriteria.SurveyType__c == 'Services - Project Manager')
+                    {
+                        
+                        if (serviceCriteria.Days_between_Surveys__c != null)
+                        {
+                            numberOfDaysForService = serviceCriteria.Days_between_Surveys__c.intValue();
+                        }                            
+                        
+                        if (serviceCriteria.SurveySubType__c == 'No/Training')
+                        {
+
+                            Set<String> pmrestrictedEmails = getRestrictedEmailDomain(serviceCriteria.Restricted_Emails__c);
+                            List<String> pmgroupName = getListOfValues(serviceCriteria.Group__c);
+                            List<String> pmRoles = getListOfValues(serviceCriteria.Role__c.Trim());
+                            List<String> pmAssignmentStatus = getListOfValues(serviceCriteria.Assignment_Status__c.Trim());
+                            List<String> pmMilestoneType = getListOfValues(serviceCriteria.Milestone_Type__c.Trim());
+                            
+                            Date enddatePM = Date.valueOf(Datetime.now().addDays(- Integer.valueOf(serviceCriteria.Number_of_Days__c)).formatGmt('yyyy-MM-dd'));
+                            
+                            supportSOQLWhere += ' pse__End_Date__c IN (:enddatePM)';// pse__Status__c = \''+serviceCriteria.Assignment_Status__c+'\' AND 
+                            supportSOQLWhere += ' AND (Contact_Name__c != null OR pse__Project__r.Customer_Project_Contact__c != null) ';
+                            supportSOQLWhere += ' AND pse__Milestone__r.pse__Override_Project_Practice__r.Name = \''+serviceCriteria.Override_Project_Practice__c+'\'';//Resource_Practice_Name__c = \'Project Management\' AND
+                            supportSOQLWhere += ' AND (NOT Milestone_Practice_Name__c LIKE \'Training\') AND pse__Project__r.pse__Project_Type__c = \''+serviceCriteria.Project_Type__c+'\'';
+                            supportSOQLWhere += ' AND Survey_Sent__c = false AND pse__Project__r.Survey_Sent__c = false And pse__Is_Billable__c = true';//And pse__Milestone__r.Milestone_Type__c = \''+serviceCriteria.Milestone_Type__c+'\'
+                            supportSOQLWhere += ' AND pse__Project__r.Customer_Project_Contact__r.Status__c = \'Active\' AND pse__Project__r.Customer_Project_Contact__r.Bounced_Email__c = false';
+                            supportSOQLWhere += ' AND Contact_Name__r.Account.Spt_Survey_Opt_Out__c = false';
+                            
+                            if (!pmAssignmentStatus.IsEmpty())
+                            {
+                                supportSOQLWhere += ' AND pse__Status__c IN : pmAssignmentStatus';
+                            }
+                            
+                            if (!pmMilestoneType.IsEmpty())
+                            {
+                                supportSOQLWhere += ' AND pse__Milestone__r.Milestone_Type__c IN : pmMilestoneType';
+                            }
+                            
+                            if (!pmRoles.IsEmpty())
+                            {
+                                supportSOQLWhere += ' AND pse__Role__c IN : pmRoles';
+                            }
+                            
+                            if (!pmgroupName.IsEmpty())
+                            {
+                                supportSOQLWhere += ' AND pse__Project__r.pse__Group__r.Name IN : pmgroupName';
+                            }
+                            
+                            if (!pmrestrictedEmails.IsEmpty())
+                            {
+                                supportSOQLWhere += ' AND (NOT pse__Project__r.Customer_Project_Contact__r.Email LIKE : pmrestrictedEmails)';
+                            } 
+                        }
+                        
+                        if (serviceCriteria.SurveySubType__c == 'W/Training')
+                        {
+                           
+                            Set<String> pmtrestrictedEmails = getRestrictedEmailDomain(serviceCriteria.Restricted_Emails__c);
+                            List<String> pmtgroupName = getListOfValues(serviceCriteria.Group__c);
+                            List<String> pmtgRoles = getListOfValues(serviceCriteria.Role__c.Trim());
+                            List<String> pmtAssignmentStatus = getListOfValues(serviceCriteria.Assignment_Status__c.Trim());
+                            List<String> pmtMilestoneType = getListOfValues(serviceCriteria.Milestone_Type__c.Trim());
+                            
+                            Date enddatePMT = Date.valueOf(Datetime.now().addDays(- Integer.valueOf(serviceCriteria.Number_of_Days__c)).formatGmt('yyyy-MM-dd'));
+                             System.debug('enddatePMT==>'+enddatePMT);
+                            System.debug('fromEndDate==>'+fromEndDate);
+                            System.debug('toEndDate==>'+toEndDate);
+                            
+                            if(this.fromEndDate != null  && this.toEndDate != null)
+                            {
+                            	supportSOQLWhere += ' pse__End_Date__c >=: fromEndDate AND pse__End_Date__c <=: toEndDate';    
+                            }
+                            else
+                            {
+                                supportSOQLWhere += ' pse__End_Date__c IN (:enddatePMT)';
+                            }
+                           
+                            supportSOQLWhere += ' AND Name LIKE \''+'%'+String.escapeSingleQuotes(serviceCriteria.Assignment_Name__c) +'%\'';//pse__Status__c = \''+serviceCriteria.Assignment_Status__c+'\' AND
+                            supportSOQLWhere += ' AND (Contact_Name__c != null OR pse__Project__r.Customer_Project_Contact__c != null)';
+                            supportSOQLWhere += ' AND pse__Milestone__r.pse__Override_Project_Practice__r.Name = \''+serviceCriteria.Override_Project_Practice__c+'\'';// AND Milestone_Practice_Name__c = \'Training\'
+                            supportSOQLWhere += ' AND pse__Project__r.pse__Project_Type__c = \''+serviceCriteria.Project_Type__c+'\'';//AND Resource_Practice_Name__c = \'Project Management\'
+                            supportSOQLWhere += ' AND Survey_Sent__c = false AND pse__Project__r.Survey_Sent__c = false And pse__Is_Billable__c = true';// And pse__Milestone__r.Milestone_Type__c = \''+serviceCriteria.Milestone_Type__c+'\'
+                            supportSOQLWhere += ' AND pse__Project__r.Customer_Project_Contact__r.Status__c = \'Active\' AND pse__Project__r.Customer_Project_Contact__r.Bounced_Email__c = false';
+                            supportSOQLWhere += ' AND Contact_Name__r.Account.Spt_Survey_Opt_Out__c = false';
+                            
+                            if (!pmtAssignmentStatus.IsEmpty())
+                            {
+                                supportSOQLWhere += ' AND pse__Status__c IN : pmtAssignmentStatus';
+                            }
+                            
+                            if (!pmtMilestoneType.IsEmpty())
+                            {
+                                supportSOQLWhere += ' AND pse__Milestone__r.Milestone_Type__c IN : pmtMilestoneType';
+                            }
+                            
+                            if (!pmtgRoles.IsEmpty())
+                            {
+                                supportSOQLWhere += ' AND pse__Role__c IN : pmtgRoles';
+                            }
+                            
+                            if (!pmtgroupName.IsEmpty())
+                            {
+                                supportSOQLWhere += ' AND pse__Project__r.pse__Group__r.Name IN : pmtgroupName';
+                            }
+                            
+                            if (!pmtrestrictedEmails.IsEmpty())
+                            {
+                                supportSOQLWhere += ' AND (NOT pse__Project__r.Customer_Project_Contact__r.Email LIKE : pmtrestrictedEmails)';
+                            }
+                            
+                        }
+                        
+                        if (serviceCriteria.SurveySubType__c == 'Project')
+                        {
+                            
+                            Set<String> projectrestrictedEmails = getRestrictedEmailDomain(serviceCriteria.Restricted_Emails__c);
+                            List<String> projectgroupName = getListOfValues(serviceCriteria.Group__c);
+                            Date enddateProject = Date.valueOf(Datetime.now().addDays(- Integer.valueOf(serviceCriteria.Number_of_Days__c)).formatGmt('yyyy-MM-dd'));
+                            supportSOQLWhere += ' pse__Project__r.pse__End_Date__c IN (:enddateProject)'; 
+                            supportSOQLWhere += ' AND pse__Project__r.Survey_Sent__c = false AND pse__Project__r.Customer_Project_Contact__c != null';
+                            supportSOQLWhere += ' AND pse__Project__r.pse__Project_Type__c = \'' + serviceCriteria.Project_Type__c + '\'';
+                            supportSOQLWhere += ' AND pse__Project__r.pse__Stage__c = \'' + serviceCriteria.Project_Stage__c + '\'';//pse__Milestone__r.pse__Override_Project_Practice__r.Name = \''+serviceCriteria.Override_Project_Practice__c+'\' AND 
+                            supportSOQLWhere += ' AND pse__Project__r.Customer_Project_Contact__r.Status__c = \'Active\' AND pse__Project__r.Customer_Project_Contact__r.Bounced_Email__c = false';
+
+                            if (!projectgroupName.IsEmpty())
+                            {
+                                supportSOQLWhere += ' AND pse__Project__r.pse__Group__r.Name IN : projectgroupName';
+                            }
+                            
+                            if (!projectrestrictedEmails.IsEmpty())
+                            {
+                                supportSOQLWhere += ' AND (NOT pse__Project__r.Customer_Project_Contact__r.Email LIKE : projectrestrictedEmails)';
+                            }
+                        }    
+                    }
+                }
+            }
+            
+            supportSurveySOQL += supportSOQLWhere;
+            
+            system.debug(' %%%%% supportSurveySOQL = ' + supportSurveySOQL);
+            system.debug(' %%%%% supportSOQLWhere = ' + supportSOQLWhere);
+            
+            this.query = supportSurveySOQL;
+            
+        }
+        
+        if (Test.isRunningTest())
+        {
+            String queryString = 'Select Id,';
+            if (this.recordType == 'Service_Selection_Criteria')
+            {  
+                queryString +='Name,pse__Project__c,pse__Project__r.Name,pse__Project__r.Id,pse__Project__r.Customer_Project_Contact__r.Id,pse__Project__r.pse__Project_ID__c,pse__Milestone__c,pse__Milestone__r.Name,pse__Milestone__r.Milestone_Type__c,pse__Milestone__r.Id,Resource_Practice_Name__c,pse__Project__r.Opportunity_Number__c,';
+                queryString +='pse__Assignment_Number__c,Contact_Name__c,Contact_Name__r.Id,Contact_Name__r.Name,Contact_Name__r.Title,Contact_Name__r.Salutation,Contact_Name__r.FirstName,Contact_Name__r.LastName,Contact_Name__r.Email,';
+                queryString +='Contact_Name__r.MailingAddress,Contact_Name__r.MailingStreet,Contact_Name__r.MailingCity,Contact_Name__r.MailingCountry,Contact_Name__r.MailingState,Contact_Name__r.MailingPostalCode,';
+                queryString +='Contact_Name__r.Phone,Contact_Name__r.Primary_Language__c, Contact_Name__r.AccountId, Contact_Name__r.Account.Name,Contact_Name__r.Account.AccountNumber,Contact_Name__r.Account.Spt_Survey_Opt_Out__c,';
+                queryString +='Contact_Name__r.Account.Brand__c,Contact_Name__r.Account.Franchisor__c,pse__Project__r.pse__Region__c,pse__Project__r.pse__Region__r.Name,pse__Project__r.pse__Group__c,pse__Project__r.pse__Group__r.Name,';
+                queryString +='pse__Start_Date__c,pse__End_Date__c ,pse__Resource__c,pse__Resource__r.Name,pse__Status__c,pse__Role__c,pse__Milestone__r.pse__Override_Project_Practice__c,pse__Milestone__r.pse__Override_Project_Practice__r.Name,';
+                queryString +='pse__Project__r.Customer_Project_Contact__r.AccountId,pse__Project__r.Customer_Project_Contact__r.Account.Name,pse__Project__r.Customer_Project_Contact__r.Account.AccountNumber,pse__Project__r.Customer_Project_Contact__r.Account.Brand__c,';
+                queryString +='pse__Project__r.Customer_Project_Contact__r.MailingAddress,pse__Project__r.Customer_Project_Contact__r.MailingCity,pse__Project__r.Customer_Project_Contact__r.MailingCountry,pse__Project__r.Customer_Project_Contact__r.Phone,';
+                queryString +='pse__Project__r.Customer_Project_Contact__r.MailingState,pse__Project__r.Customer_Project_Contact__r.MailingPostalCode,pse__Project__r.Customer_Project_Contact__r.Email,pse__Project__r.Customer_Project_Contact__r.FirstName,';
+                queryString +='pse__Project__r.Customer_Project_Contact__r.LastName,pse__Project__r.pse__Stage__c,pse__Project__r.Customer_Project_Contact__r.Title,pse__Project__r.Customer_Project_Contact__r.Account.Franchisor__c,pse__Project__r.Customer_Project_Contact__r.Primary_Language__c,';
+                queryString +='Project_Manager__c,Project_Manager__r.Name';
+                queryString +=' FROM pse__Assignment__c ';
+            }
+            else
+            {
+                queryString +='Origin,Reason,Case_Reason__c,Question_Type__c,AssetId,Asset.Name,CaseNumber,ContactId,Status,Support_Tier_Designation__c,Support_Tier_Designation__r.Inactive__c,Account_Name__c,Contact.Name,';
+                queryString +='AccountId,Type,Account.Type,RecordType.Name,Contact.Spt_Survey_Opt_Out__c,Account.Spt_Survey_Opt_Out__c,No_Survey__c,Contact.Title,';
+                queryString +='Contact.Salutation,Contact.FirstName,Contact.LastName,Account.Name,Account.Management_Company_Name__c,Account.Franchisor__c,Account.Brand__c,Contact.MailingAddress,';
+                queryString +='Contact.Phone,Contact.Email,OwnerId,Owner.Name,Subject,Deployment_Instance_History_Record__c,Priority,Customer_Severity__c,CreatedDate,Deployment_Instance_History_Record__r.Name,';
+                queryString +='ClosedDate,Solution_Domain__c,SupportRegion__c,Contact.MailingStreet,Contact.MailingCity,Contact.MailingCountry,Contact.MailingState,Contact.MailingPostalCode,';
+                queryString +='Project__c,Project__r.pse__Group__c,Project__r.pse__Group__r.Name,Project__r.Survey_Sent__c,Solution_Adoption_Start_Date__c,DI_Product_Group__c,';
+                queryString +='Support_Tier__c,Support_Tier_Designation_Region__c,Case_Product_Line__c,Module__c,Component__c,Product_Group__c,Actual_time__c,Appointment_Booked_Email_Received__c,Level_1_Tier__c ';
+                queryString += 'FROM Case';
+            }
+            return Database.getQueryLocator(queryString);
+        }
+        else 
+        {
+            if(this.query != null)
+            {
+            	return Database.getQueryLocator(this.query);    
+            }
+           
+            else
+            {
+                return null;
+            }
+        }
+    }
+    
+    global void execute(Database.BatchableContext bc, List<SObject> scope) 
+    {
+        Map<String, String> processedContactMap = new Map<String, String>();
+        
+        //CREATING SUPPORT SUREVY RECORDS FROM CASESES
+        if (this.recordType == 'Support_Selection_Criteria')
+        {   
+            processedContactMap = new Map<String, String>();
+            Set<Id> caseIds = new Set<Id>();
+            Set<Id> conIds = new Set<Id>();
+            for (SObject record : scope)
+            {
+                Case c = (Case) record;
+                caseIds.add(c.id);
+                conIds.add(c.ContactId);
+            }
+            System.debug('numberOfDaysForSupport==>'+numberOfDaysForSupport);
+            //GET EXISTING SUPPORT SURVEY FOR PROCESSED CASESES
+            Map<Id,Medallia_Support_Survey__c> mapOfExistingSupportSurveysForCase = getExistingSupportSurveys(caseIds, null, null);
+            
+            //GET EXISTING SUPPORT SURVEY FOR PROCESSING CASESES & CONTACTS IN CURRENT BATCH
+            Map<Id,Medallia_Support_Survey__c> mapOfExistingSupportSurveysForCon = getExistingSupportSurveys(null, conIds, numberOfDaysForSupport);
+            
+            List<Medallia_Support_Survey__c> lstofSupportSurvey = new List<Medallia_Support_Survey__c>();
+            
+            for (SObject record : scope)
+            {
+                Case c = (Case) record;
+                // CHECK IF CONTACT HAS SENT INVITE WITHIN 22 DAYS FOR RESPECTIVE CASE RECORD & CONTACT. AFTER 22 DAYS ONLEY THEY CAN GET NEXT INVITE.   
+                if (!mapOfExistingSupportSurveysForCase.containsKey(c.Id) && !processedContactMap.containsKey(c.ContactId) && !mapOfExistingSupportSurveysForCon.containsKey(c.ContactId))
+                {
+                    lstofSupportSurvey.add(generateSupportSurvey(c, this.surveyType));
+                    processedContactMap.put(c.ContactId,c.ContactId);
+                }
+            }
+            
+            if (!lstofSupportSurvey.isEmpty())
+            {
+                failureIdsSet = new Set<Id>();
+                successIdsSet = new Set<Id>();
+                
+                Database.SaveResult[] srList = Database.insert(lstofSupportSurvey, false);
+                // Iterate through each returned result 
+                for(Integer i=0; i < srList.size(); i++) 
+                {
+                    //for (Database.SaveResult sr : srList)
+                    //{
+                        if (srList.get(i).isSuccess()) 
+                        {
+                            successIdsSet.add(srList.get(i).getId());
+                        }
+                        else
+                        {
+                            bFail = true;
+                            string strError;
+                            integer j = 1;                        
+                            for (Database.Error err : srList.get(i).getErrors())
+                            {
+                                system.debug(err.getStatusCode() + ': ' + err.getMessage());
+                                j += 1;
+                                strError = 'Support_Selection_Criteria ERROR #:' + string.valueOf(j) + ' - ' + err.getStatusCode() +': ' + err.getMessage() +' - '+'Failure Record Ids :'+lstofSupportSurvey[i].Case_ID__c + '\n\n\n\n';                                
+                            }
+                            // WRITE DTS INTGRATION LOG ERROR 
+                            logDTS('Error', 'Error while creating Surveys for Support_Selection_Criteria', strError);
+                        }
+                    //}
+                }
+            }
+        }
+        
+         //CREATING ADOPTION SUREVY RECORDS FROM CASESES
+        if (this.recordType == 'Solution_Adoption')
+        {
+            Set<Id> caseIds = new Set<Id>();
+            Set<Id> conIds = new Set<Id>();
+            for (SObject record : scope)
+            {
+                Case c = (Case) record;
+                caseIds.add(c.id);
+                conIds.add(c.ContactId);
+            }
+            
+            processedContactMap = new Map<String, String>();
+            
+             //GET EXISTING ADOPTION SURVEY FOR PROCESSED CASESES.
+            Map<Id, Medallia_Adoption_Survey__c> mapOfExistingAdoptionSurveysForCase = getExistingAdoptionSurveys(caseIds, null, null);
+            
+            //GET EXISTING ADOPTION SURVEY FOR PROCESSING CASESES & CONTACTS IN CURRENT BATCH.
+            Map<Id, Medallia_Adoption_Survey__c> mapOfExistingAdoptionSurveysForCon = getExistingAdoptionSurveys(null, conIds, numberOfDaysForAdoption);
+            
+            List<Medallia_Adoption_Survey__c> lstofAdoptionSurvey = new List<Medallia_Adoption_Survey__c>();
+            
+            System.debug('mapOfExistingAdoptionSurveysForCase==>'+mapOfExistingAdoptionSurveysForCase);
+            System.debug('mapOfExistingAdoptionSurveysForCon==>'+mapOfExistingAdoptionSurveysForCon);
+            
+            
+            for (SObject record : scope)
+            {
+                Case c = (Case) record;
+                // CHECK IF CONTACT HAS SENT INVITE WITHIN MENTIONED DAYS IN CRITERIA FOR RESPECTIVE CASE RECORD & CONTACT. AFTER MENTIONED DAYS IN CRITERIA ONLEY THAT CONTACT CAN GET NEXT INVITE.  
+                if (!mapOfExistingAdoptionSurveysForCase.containsKey(c.Id) && !processedContactMap.containsKey(c.ContactId) && !mapOfExistingAdoptionSurveysForCon.containsKey(c.ContactId))
+                {
+                    lstofAdoptionSurvey.add(generateAdoptionSurvey(c, this.surveyType));
+                    processedContactMap.put(c.ContactId,c.ContactId);
+                }    
+            }
+            
+            System.debug('lstofAdoptionSurvey==>'+lstofAdoptionSurvey);
+            if (!lstofAdoptionSurvey.isEmpty())
+            {
+                
+                failureIdsSet = new Set<Id>();
+                successIdsSet = new Set<Id>();
+                
+                Database.SaveResult[] srList = Database.insert(lstofAdoptionSurvey, false);
+                
+                // Iterate through each returned result
+                for(Integer i=0; i < srList.size(); i++) 
+                { 
+                    //for (Database.SaveResult sr : srList)
+                   // {
+                        if (srList.get(i).isSuccess()) 
+                        {
+                            successIdsSet.add(srList.get(i).getId());
+                        }
+                        else
+                        {
+                            bFail = true;
+                            string strError;
+                            integer j = 1;                        
+                            for (Database.Error err : srList.get(i).getErrors())
+                            {
+                                System.debug(err.getStatusCode() + ': ' + err.getMessage());
+                                j += 1;
+                                strError = 'Solution_Adoption ERROR #:' + string.valueOf(j) + ' - ' + err.getStatusCode() + ': ' + err.getMessage() +' - '+'Failure Record Ids :'+lstofAdoptionSurvey[i].CaseID__c + '\n\n\n\n';                                
+                            }
+                            // WRITE DTS INTGRATION LOG ERROR 
+                            logDTS('Error', 'Error while creating Surveys for Solution_Adoption', strError);
+                        }
+                    //}
+                }
+            }
+        }
+        
+        //CREATING SERVICE SUREVY RECORDS FROM ASSIGNMENET
+        if (this.recordType == 'Service_Selection_Criteria') 
+        {
+            
+            Set<Id> assigmentIds = new Set<Id>();
+            Set<Id> conIds = new Set<Id>();
+            Set<Id> projIds = new Set<Id>();
+            
+            for (SObject record : scope)
+            {
+                pse__Assignment__c assignment = (pse__Assignment__c) record;
+                assigmentIds.add(assignment.id);
+                
+                if (assignment.Contact_Name__c != null)
+                {
+                    conIds.add(assignment.Contact_Name__r.Id);
+                }
+                    
+                else if (assignment.pse__Project__r.Customer_Project_Contact__r != null)
+                {
+                    conIds.add(assignment.pse__Project__r.Customer_Project_Contact__r.Id);
+                }
+
+                projIds.add(assignment.pse__Project__r.Id);
+                
+            }
+            
+            System.debug('assigmentIds==>'+assigmentIds);
+            //GET EXISTING SERVICE SURVEY FOR PROCESSED ASSIGNMENT.
+            Map<Id, Medallia_Service_Survey__c> mapOfExistingServiceSurveysForAssigment = getExistingServiceSurveys(assigmentIds, null, null,null,null);
+            
+            //GET EXISTING SERVICE SURVEY FOR PROCESSED ASSIGNMENT FOR RESPECTIVE CONTACT & SURVEY TYPE.
+            Map<Id, Medallia_Service_Survey__c> mapOfExistingServiceSurveysForCon = getExistingServiceSurveys(null, conIds, numberOfDaysForService,this.surveyType,null);
+            
+            List<Medallia_Service_Survey__c> lstofServiceSurvey = new List<Medallia_Service_Survey__c>();
+            
+            System.debug('mapOfExistingServiceSurveysForAssigment==>'+mapOfExistingServiceSurveysForAssigment);
+            System.debug('mapOfExistingServiceSurveysForCon==>'+mapOfExistingServiceSurveysForCon);
+            
+            if (this.surveyType == 'Services - Project Manager' && this.surveySubType == 'No/Training')
+            {
+                processedContactMap = new Map<String, String>();
+                for (SObject record : scope)
+                {
+                    pse__Assignment__c assignment = (pse__Assignment__c) record;
+                    String conId;
+                    if (assignment.Contact_Name__c != null)
+                    {
+                        conId = assignment.Contact_Name__r.Id; 
+                    }
+                    else
+                    {
+                        conId = assignment.pse__Project__r.Customer_Project_Contact__r.Id; 
+                    }
+                    
+                    if (conId != null)
+                    {
+                        // CHECK IF CONTACT HAS SENT INVITE WITHIN MENTIONED DAYS IN CRITERIA FOR RESPECTIVE Assigment RECORD & CONTACT. AFTER MENTIONED DAYS ONLEY THAT CONTACT CAN GET NEXT INVITE. 
+                        if (!mapOfExistingServiceSurveysForAssigment.containsKey(assignment.Id) && !processedContactMap.containsKey(conId) && !mapOfExistingServiceSurveysForCon.containsKey(conId))
+                        {
+                            lstofServiceSurvey.add(generateServiceSurvey(assignment, this.surveyType, this.surveySubType));
+                            processedContactMap.put(conId,conId);
+                        }
+                    }    
+                }
+            }//CREATING SERVICE SURVEY FOR PM WITH TRAINING
+            else if (this.surveyType == 'Services - Project Manager' && this.surveySubType == 'W/Training')
+            {
+                processedContactMap = new Map<String, String>();
+                for (SObject record : scope)
+                {
+                    pse__Assignment__c assignment = (pse__Assignment__c) record;
+                    String conId;
+                    if (assignment.Contact_Name__c != null)
+                    {
+                        conId = assignment.Contact_Name__r.Id; 
+                    }
+                    else
+                    {
+                        conId = assignment.pse__Project__r.Customer_Project_Contact__r.Id; 
+                    }
+                    
+                    if (conId != null)
+                    {
+                        // CHECK IF CONTACT HAS SENT INVITE WITHIN MENTIONED DAYS IN CRITERIA FOR RESPECTIVE Assigment RECORD & CONTACT. AFTER MENTIONED DAYS ONLEY THAT CONTACT CAN GET NEXT INVITE. 
+                        if (!mapOfExistingServiceSurveysForAssigment.containsKey(assignment.Id) && !processedContactMap.containsKey(conId) && !mapOfExistingServiceSurveysForCon.containsKey(conId))
+                        {
+                            lstofServiceSurvey.add(generateServiceSurvey(assignment, this.surveyType, this.surveySubType));
+                            processedContactMap.put(conId,conId);
+                        }    
+                    }
+                }
+                System.debug('lstofServiceSurvey==>'+lstofServiceSurvey);
+            }//CREATING SERVICE SURVEY FOR PM PROJECT
+            else if (this.surveyType == 'Services - Project Manager' && this.surveySubType == 'Project')
+            {
+                
+                Map<Id, Medallia_Service_Survey__c> mapOfExistingServiceSurveysForProjects = new Map<Id, Medallia_Service_Survey__c>();
+                
+                if (projIds != null)
+                {
+                    for (Medallia_Service_Survey__c surveyProj : [SELECT Id, ContactId__c, Project_ID__c, Assignment_ID__c, Date_Invited__c FROM Medallia_Service_Survey__c WHERE Project_ID__c IN : projIds])
+                    {
+                        mapOfExistingServiceSurveysForProjects.put(surveyProj.Project_ID__c, surveyProj);
+                    }
+                }
+                
+                Map<Id, Id> currentProjectsAdded = new Map<Id, Id>();
+                processedContactMap = new Map<String, String>();
+                for (SObject record : scope)
+                {
+                    pse__Assignment__c assignment = (pse__Assignment__c) record;
+                    String conId;
+                    if (assignment.Contact_Name__c != null)
+                    {
+                        conId = assignment.Contact_Name__r.Id; 
+                    }
+                    else
+                    {
+                        conId = assignment.pse__Project__r.Customer_Project_Contact__r.Id; 
+                    }
+                    
+                    if (conId != null)
+                    {
+                        // CHECK IF CONTACT HAS SENT INVITE WITHIN MENTIONED DAYS IN CRITERIA FOR RESPECTIVE Assigment RECORD & CONTACT. AFTER MENTIONED DAYS ONLEY THAT CONTACT CAN GET NEXT INVITE.
+                        if (!mapOfExistingServiceSurveysForProjects.containsKey(assignment.pse__Project__r.Id) && !currentProjectsAdded.containsKey(assignment.pse__Project__r.Id) && !processedContactMap.containsKey(conId) && !mapOfExistingServiceSurveysForCon.containsKey(conId))
+                        {
+                            lstofServiceSurvey.add(generateServiceSurvey(assignment, this.surveyType, this.surveySubType));
+                            currentProjectsAdded.put(assignment.pse__Project__r.Id,assignment.pse__Project__r.Id);
+                            processedContactMap.put(conId,conId);
+                        }    
+                    }    
+                }    
+            }
+            else
+            {
+                for (SObject record : scope)
+                {
+
+                    pse__Assignment__c assignment = (pse__Assignment__c) record;
+                    
+                    processedContactMap = new Map<String, String>();
+                    String conId;
+                    
+                    if (assignment.Contact_Name__c != null)
+                    {
+                        conId = assignment.Contact_Name__r.Id; 
+                    }
+                    else
+                    {
+                        conId = assignment.pse__Project__r.Customer_Project_Contact__r.Id; 
+                    }
+                    
+                    if (conId != null)
+                    {
+                        // CHECK IF CONTACT HAS SENT INVITE WITHIN MENTIONED DAYS IN CRITERIA FOR RESPECTIVE Assigment RECORD & CONTACT. AFTER MENTIONED DAYS ONLEY THAT CONTACT CAN GET NEXT INVITE.
+                        if (!mapOfExistingServiceSurveysForAssigment.containsKey(assignment.Id) && !processedContactMap.containsKey(conId) && !mapOfExistingServiceSurveysForCon.containsKey(conId))
+                        {
+                            lstofServiceSurvey.add(generateServiceSurvey(assignment, this.surveyType, this.surveySubType));
+                            processedContactMap.put(conId,conId);
+                        }    
+                    }    
+                }    
+            }
+            
+            System.debug('lstofServiceSurvey==>'+lstofServiceSurvey);
+            
+            if (!lstofServiceSurvey.isEmpty())
+            {
+                
+                failureIdsSet = new Set<Id>();
+                successIdsSet = new Set<Id>();
+                
+                Database.SaveResult[] srList = Database.insert(lstofServiceSurvey, false);
+                // Iterate through each returned result
+                for(Integer i=0; i < srList.size(); i++) 
+                { 
+                    //for (Database.SaveResult sr : srList)
+                    //{
+                        if (srList.get(i).isSuccess()) 
+                        {
+                            successIdsSet.add(srList.get(i).getId());
+                        }
+                        else
+                        {
+                            bFail = true;
+                            string strError;
+                            integer j = 1;
+                            for (Database.Error err : srList.get(i).getErrors())
+                            {
+                                System.debug(err.getStatusCode() + ': ' + err.getMessage());
+                                j += 1;
+                                strError = 'Service_Selection_Criteria ERROR #:' + string.valueOf(j) + ' - ' + err.getStatusCode() + ': ' + err.getMessage() +' - '+'Failure Record Ids :'+lstofServiceSurvey[i].Assignment_ID__c + '\n\n\n\n';                            
+                            }
+                            // WRITE DTS INTGRATION LOG ERROR 
+                            logDTS('Error', 'Error while creating Surveys for Service', strError);
+                        }
+                    //}
+                }
+            }
+        }
+    }
+    
+    global void finish(Database.BatchableContext bc) 
+    {        
+        // WRITE DTS INTGRATION LOG SUCCESS 
+        if (!bFail) 
+        {
+            logDTS('Success', 'Batch finish() method', 'No errors to report');
+        }        
+    }
+    
+    private void logDTS(string strType, string strSummary, string strErrMsg)
+    {        
+        AH_DTS_Integration_Logger.writeToDTSLog(
+            system.now(), 				// dLogDateTime
+            'Medallia - Apex Batch', 	// sIntegrationName
+            'Active', 					// sIntegrationStatus ('Active', 'Failure', 'Inactive') 
+            strType,  					// sType ('Data Validation', 'Debug', 'Error', 'Failure', 'Information', 'Success', 'Warning')
+            strSummary, 				// sSummary
+            strErrMsg,  				// sDetails
+            '4 - Minor',  				// sIssueSeverity ('1 - Critical', '2 - Urgent', '3 - Medium', '4 - Minor')
+            UserInfo.getUserName(),  	// sJobProcessId
+            'AH_MedalliaSurvey_Batch', 	// sJobProcessName
+            'Apex Job',  				// sJobProcessType
+            'Salesforce',  				// sHostNameOrIP
+            true,  						// bBiz2Resolve
+            false); 					// bWillSelfResolve            
+    }
+    
+    //THIS METHOD IS MAPPING CASE RECORDS WITH MEDALLIA SUPPORT SURVICE OBJECT RECORD
+    public Medallia_Support_Survey__c generateSupportSurvey(Case c, String surveyType)
+    {
+        Medallia_Support_Survey__c supportSurvey = new Medallia_Support_Survey__c();
+        
+        supportSurvey.AccountCaseId__c = c.AccountId;
+        supportSurvey.Account_Name__c = c.Account_Name__c;
+        if (c.Contact != null && c.Contact.MailingAddress != null)
+        {
+            Address addr = c.Contact.MailingAddress;
+            if (addr != null)
+            {
+                supportSurvey.Address__c = '' + addr.getStreet();
+            }    
+        }
+        supportSurvey.Brand__c = c.Account.Brand__c;
+        supportSurvey.Case_Number__c = c.CaseNumber;
+        supportSurvey.Case_Origin__c = c.Origin;
+        supportSurvey.Case_Owner__c = c.Owner.Name;
+        supportSurvey.Case_Priority__c = c.Priority;
+        supportSurvey.Case_Reason__c = c.Case_Reason__c;
+        supportSurvey.Case_Subject__c = c.Subject;
+        supportSurvey.Case_ID__c = c.Id;
+        supportSurvey.Closed_Date__c = Date.valueOf(c.ClosedDate);
+        supportSurvey.Contact_ID__c = c.ContactId;
+        supportSurvey.Contact_Title__c = c.Contact.Title;
+        supportSurvey.Create_Date__c = Date.valueOf(c.CreatedDate);
+        supportSurvey.Customer_Severity__c = c.Customer_Severity__c;
+        if (c.Asset != null)
+        {
+            supportSurvey.Deployment_Instance__c = c.Asset.Name; 	//c.Deployment_Instance_History_Record__r.Name;
+        }    
+        supportSurvey.Email__c = c.Contact.Email;
+        supportSurvey.FirstName__c = c.Contact.FirstName;
+        supportSurvey.LastName__c = c.Contact.LastName;
+        supportSurvey.Level_1_Tier__c = c.Level_1_Tier__c;
+        supportSurvey.Franchisor__c = c.Account.Franchisor__c;
+        supportSurvey.Mngt_Company__c = c.Account.Management_Company_Name__c;
+        supportSurvey.Phone__c = c.Contact.Phone;
+        supportSurvey.Salutation__c = c.Contact.Salutation;
+        supportSurvey.Solution_Domain__c = c.Solution_Domain__c;
+        supportSurvey.Support_Region__c = c.SupportRegion__c;
+        supportSurvey.Support_Tier__c = c.Support_Tier__c;
+        supportSurvey.Support_Tier_Designation_Region__c = c.Support_Tier_Designation_Region__c;
+        supportSurvey.State__c = c.Contact.MailingState;
+        supportSurvey.Zip_Code__c = c.Contact.MailingPostalCode;
+        supportSurvey.City__c = c.Contact.MailingCity;
+        supportSurvey.Country__c = c.Contact.MailingCountry;
+        supportSurvey.Case_Record_Type__c = c.RecordType.Name;
+        supportSurvey.Case_Status__c = c.Status;
+        supportSurvey.Case_Type__c = c.Type;
+        supportSurvey.Survey_Type__c = surveyType;
+        supportSurvey.Case_Product_Line__c = c.Case_Product_Line__c;
+        supportSurvey.Case_Component__c = c.Component__c;
+        supportSurvey.Case_Module__c = c.Module__c;
+        //supportSurvey.Product_Group__c = c.Product_Group__c;
+        supportSurvey.DI_Product_Group__c = c.DI_Product_Group__c; 
+        
+        return supportSurvey;
+    }
+    
+    //THIS METHOD IS MAPPING CASE RECORDS WITH MEDALLIA ADOPTION SURVICE OBJECT RECORD
+    public Medallia_Adoption_Survey__c generateAdoptionSurvey(Case c, String surveyType)
+    {
+        Medallia_Adoption_Survey__c adoptionSurvey = new Medallia_Adoption_Survey__c();
+        adoptionSurvey.AccountID__c = c.AccountId;
+        adoptionSurvey.Account_Name__c = c.Account_Name__c;
+        adoptionSurvey.CaseID__c = c.Id;
+        adoptionSurvey.CaseNumber__c = c.CaseNumber;
+        adoptionSurvey.Case_Owner__c =  c.Owner.Name;
+        adoptionSurvey.ContactID__c = c.ContactId;
+        adoptionSurvey.ContactName__c = c.Contact.Name;
+        adoptionSurvey.EmailAddress__c = c.Contact.Email;
+        adoptionSurvey.Franchisor__c = c.Account.Franchisor__c;
+        adoptionSurvey.SupportRegion__c = c.SupportRegion__c;
+        adoptionSurvey.ClosedDate__c = Date.valueOf(c.ClosedDate);
+        adoptionSurvey.SolutionAdoptionStartDate__c = c.Solution_Adoption_Start_Date__c;
+        adoptionSurvey.Brand__c = c.Account.Brand__c;
+        adoptionSurvey.Survey_Type__c = surveyType;
+        adoptionSurvey.Send_ToMedalliaDate__c = System.now();
+        adoptionSurvey.Case_Product_Line__c = c.Case_Product_Line__c;
+        adoptionSurvey.Actual_time__c = c.Actual_time__c;
+        adoptionSurvey.AppointmentBookedEmailReceived__c = c.Appointment_Booked_Email_Received__c;
+        adoptionSurvey.Component__c = c.Component__c;
+        adoptionSurvey.Module__c = c.Module__c;
+        adoptionSurvey.Product_Group__c = c.Product_Group__c;
+        return adoptionSurvey;
+    }
+    
+    //THIS METHOD IS MAPPING ASSIGNMENT RECORDS WITH MEDALLIA SERVICE SURVICE OBJECT RECORD
+    public Medallia_Service_Survey__c generateServiceSurvey(pse__Assignment__c assignment, String surveyType, String surveySubType)
+    {
+        Medallia_Service_Survey__c serviceSurvey = new Medallia_Service_Survey__c();
+        Map<String,String> mapOfRegions = getMapOfRegions();
+        
+        serviceSurvey.Assignment_Start_Date__c = assignment.pse__Start_Date__c;
+        serviceSurvey.Assignment_End_Date__c = assignment.pse__End_Date__c;	
+        serviceSurvey.Assignment_ID__c = assignment.Id;
+        serviceSurvey.Assignment_Name__c = assignment.Name;
+        serviceSurvey.Assignment_Number__c = assignment.pse__Assignment_Number__c;	
+        serviceSurvey.Assignment_Status__c = assignment.pse__Status__c;
+        if(assignment.Contact_Name__c != null) 
+        {
+            serviceSurvey.Account_ID__c = assignment.Contact_Name__r.AccountId;
+            serviceSurvey.Account_Name__c = assignment.Contact_Name__r.Account.Name;
+            serviceSurvey.Account_Number__c = assignment.Contact_Name__r.Account.AccountNumber;
+            serviceSurvey.Brand__c = assignment.Contact_Name__r.Account.Brand__c;
+            //serviceSurvey.ContactAddress__c = String.Valueof(assignment.Contact_Name__r.MailingAddress);
+            if (assignment.Contact_Name__r.MailingAddress != null)
+            {
+                Address addr = assignment.Contact_Name__r.MailingAddress;
+                if (addr != null)
+                {
+                    serviceSurvey.ContactAddress__c = '' + addr.getStreet();
+                }    
+            }
+            serviceSurvey.ContactCity__c = assignment.Contact_Name__r.MailingCity;
+            serviceSurvey.ContactCountry__c = assignment.Contact_Name__r.MailingCountry;
+            serviceSurvey.ContactId__c = assignment.Contact_Name__r.Id;
+            serviceSurvey.Phone__c = assignment.Contact_Name__r.Phone;
+            serviceSurvey.ContactState__c = assignment.Contact_Name__r.MailingState;
+            serviceSurvey.ContactZipCode__c = assignment.Contact_Name__r.MailingPostalCode;
+            serviceSurvey.Email__c = assignment.Contact_Name__r.Email;
+            serviceSurvey.FirstName__c = assignment.Contact_Name__r.FirstName;
+            serviceSurvey.LastName__c = assignment.Contact_Name__r.LastName;
+            serviceSurvey.Title__c = assignment.Contact_Name__r.Title;
+            serviceSurvey.Franchisor__c = assignment.Contact_Name__r.Account.Franchisor__c;
+            serviceSurvey.Primary_Language__c = assignment.Contact_Name__r.Primary_Language__c;
+        }
+        else if(assignment.pse__Project__r != null && assignment.pse__Project__r.Customer_Project_Contact__r != null)
+        {
+            serviceSurvey.Account_ID__c = assignment.pse__Project__r.Customer_Project_Contact__r.AccountId;
+            serviceSurvey.Account_Name__c = assignment.pse__Project__r.Customer_Project_Contact__r.Account.Name;
+            serviceSurvey.Account_Number__c = assignment.pse__Project__r.Customer_Project_Contact__r.Account.AccountNumber;
+            serviceSurvey.Brand__c = assignment.pse__Project__r.Customer_Project_Contact__r.Account.Brand__c;
+            if (assignment.pse__Project__r.Customer_Project_Contact__r.MailingAddress != null)
+            {
+                Address addr = assignment.pse__Project__r.Customer_Project_Contact__r.MailingAddress;
+                if (addr != null)
+                {
+                    serviceSurvey.ContactAddress__c = '' + addr.getStreet();
+                }    
+            }
+            serviceSurvey.ContactCity__c = assignment.pse__Project__r.Customer_Project_Contact__r.MailingCity;
+            serviceSurvey.ContactCountry__c = assignment.pse__Project__r.Customer_Project_Contact__r.MailingCountry;
+            serviceSurvey.ContactId__c = assignment.pse__Project__r.Customer_Project_Contact__r.Id;
+            serviceSurvey.Phone__c = assignment.pse__Project__r.Customer_Project_Contact__r.Phone;
+            serviceSurvey.ContactState__c = assignment.pse__Project__r.Customer_Project_Contact__r.MailingState;
+            serviceSurvey.ContactZipCode__c = assignment.pse__Project__r.Customer_Project_Contact__r.MailingPostalCode;
+            serviceSurvey.Email__c = assignment.pse__Project__r.Customer_Project_Contact__r.Email;
+            serviceSurvey.FirstName__c = assignment.pse__Project__r.Customer_Project_Contact__r.FirstName;
+            serviceSurvey.LastName__c = assignment.pse__Project__r.Customer_Project_Contact__r.LastName;
+            serviceSurvey.Title__c = assignment.pse__Project__r.Customer_Project_Contact__r.Title;
+            serviceSurvey.Franchisor__c = assignment.pse__Project__r.Customer_Project_Contact__r.Account.Franchisor__c;
+            serviceSurvey.Primary_Language__c = assignment.pse__Project__r.Customer_Project_Contact__r.Primary_Language__c;    
+        }
+        serviceSurvey.Group_Name__c = assignment.pse__Project__r.pse__Group__r.Name;
+        serviceSurvey.Milestone_ID__c = assignment.pse__Milestone__r.Id;
+        serviceSurvey.Milestone_Name__c = assignment.pse__Milestone__r.Name;
+        serviceSurvey.Opportunity_Number__c = assignment.pse__Project__r.Opportunity_Number__c;
+        serviceSurvey.Project_ID__c = assignment.pse__Project__r.Id;
+        serviceSurvey.ProjectName__c = assignment.pse__Project__r.Name;
+        if(assignment.pse__Project__r != null && assignment.pse__Project__r.pse__Region__c != null)
+        {
+            if(!mapOfRegions.containsKey(assignment.pse__Project__r.pse__Region__r.Name))
+            {
+                serviceSurvey.Region_Name__c = mapOfRegions.get('US');    
+            }
+            else
+            {
+                serviceSurvey.Region_Name__c = assignment.pse__Project__r.pse__Region__r.Name;   
+            }
+        }
+        
+        serviceSurvey.Resource_Practice__c = assignment.Resource_Practice_Name__c;
+        serviceSurvey.Role__c = assignment.pse__Role__c;
+        serviceSurvey.Project_Manager__c = assignment.Project_Manager__r.Name;
+        serviceSurvey.SendtoMedalliaDate__c = System.now();
+        serviceSurvey.SurveyType__c = surveyType;
+        serviceSurvey.SurveySubType__c = surveySubType;
+        serviceSurvey.Milestone_Type__c = assignment.pse__Milestone__r.Milestone_Type__c;
+        serviceSurvey.Resource_Name__c = assignment.pse__Resource__r.Name;
+        
+        return serviceSurvey;
+    }
+    
+    //GET Existing Support Surveys
+    public Map<Id, Medallia_Support_Survey__c> getExistingSupportSurveys(Set<Id> sObjIds, Set<Id> conIds, Integer days)
+    {
+        Map<Id, Medallia_Support_Survey__c> mapOfExistingSupportSurveys = new Map<Id, Medallia_Support_Survey__c>();
+        if (sObjIds != null && !sObjIds.isEmpty())
+        {
+            for (Medallia_Support_Survey__c survey : [SELECT Id, Contact_ID__c, Case_ID__c, Date_Invited__c FROM Medallia_Support_Survey__c WHERE Case_ID__c IN : sObjIds])
+            {
+                mapOfExistingSupportSurveys.put(survey.Case_ID__c, survey);
+            } 
+        }
+        System.debug('conIds==>'+conIds);
+        System.debug('days==>'+days);
+        if (conIds != null && !conIds.isEmpty())
+        {
+            for (Medallia_Support_Survey__c survey : [SELECT Id, Contact_ID__c, Case_ID__c, Date_Invited__c FROM Medallia_Support_Survey__c WHERE Contact_ID__c IN : conIds AND Process_Status__c ='Invited'])
+            {
+                if (survey.Date_Invited__c != null)
+                {
+                    Date dateInvited = date.newinstance(survey.Date_Invited__c.year(), survey.Date_Invited__c.month(), survey.Date_Invited__c.day());
+                    System.debug('dateInvited==>'+dateInvited);
+                    System.debug('dateInviteddays==>'+dateInvited.addDays(days));
+                    if (dateInvited.addDays(days) > System.today())
+                    {
+                        mapOfExistingSupportSurveys.put(survey.Contact_ID__c, survey);    
+                    }
+                }
+            } 
+        }        
+        return mapOfExistingSupportSurveys;
+    }
+    
+    //GET Existing Adoption Surveys
+    public Map<Id, Medallia_Adoption_Survey__c> getExistingAdoptionSurveys(Set<Id> sObjIds, Set<Id> conIds, Integer days)
+    {
+        Map<Id, Medallia_Adoption_Survey__c> mapOfExistingAdoptionSurveys = new Map<Id, Medallia_Adoption_Survey__c>();
+        if (sObjIds != null && !sObjIds.isEmpty())
+        {
+            for (Medallia_Adoption_Survey__c survey : [SELECT Id, ContactID__c, CaseID__c, Date_Invited__c FROM Medallia_Adoption_Survey__c WHERE CaseID__c IN : sObjIds])
+            {
+                mapOfExistingAdoptionSurveys.put(survey.CaseID__c, survey);
+            } 
+        }
+        
+        if (conIds != null && !conIds.isEmpty())
+        {
+            for (Medallia_Adoption_Survey__c survey : [SELECT Id, ContactID__c, CaseID__c, Date_Invited__c FROM Medallia_Adoption_Survey__c WHERE ContactID__c IN : conIds AND Process_Status__c ='Invited'])
+            {
+                if (survey.Date_Invited__c != null)
+                {
+                    Date dateInvited = date.newinstance(survey.Date_Invited__c.year(), survey.Date_Invited__c.month(), survey.Date_Invited__c.day());
+                    if (dateInvited.addDays(days) > System.today())
+                    {
+                        mapOfExistingAdoptionSurveys.put(survey.ContactID__c, survey);    
+                    }
+                }
+            } 
+        }        
+        return mapOfExistingAdoptionSurveys;
+    }
+    
+    //GET Existing Service Surveys
+    public Map<Id, Medallia_Service_Survey__c> getExistingServiceSurveys(Set<Id> sObjIds, Set<Id> conIds, Integer days,String surveyType, String surveysubType)
+    {
+        Map<Id, Medallia_Service_Survey__c> mapOfExistingServiceSurveys = new Map<Id, Medallia_Service_Survey__c>();
+        if (sObjIds != null && !sObjIds.isEmpty())
+        {
+            for (Medallia_Service_Survey__c survey : [SELECT Id, ContactId__c,Project_ID__c, Assignment_ID__c, Date_Invited__c FROM Medallia_Service_Survey__c WHERE Assignment_ID__c IN : sObjIds])
+            {
+                mapOfExistingServiceSurveys.put(survey.Assignment_ID__c, survey);
+            } 
+        }
+        
+        if (conIds != null && !conIds.isEmpty())
+        {
+            for (Medallia_Service_Survey__c survey : getExistingServiceSurveysforContact(conIds,surveyType,surveysubType))//[SELECT Id, ContactId__c,Project_ID__c, Assignment_ID__c, Date_Invited__c FROM Medallia_Service_Survey__c WHERE ContactId__c IN : conIds AND Process_Status__c ='Invited'])
+            {
+                if (survey.Date_Invited__c != null)
+                {
+                    Date dateInvited = date.newinstance(survey.Date_Invited__c.year(), survey.Date_Invited__c.month(), survey.Date_Invited__c.day());
+                    if (dateInvited.addDays(days) > System.today())
+                    {
+                        mapOfExistingServiceSurveys.put(survey.ContactId__c, survey);    
+                    }
+                }
+            } 
+        }        
+        return mapOfExistingServiceSurveys;
+    }
+    
+    //GET EXISTING SERVICE SUREVY FOR PROCESSING CONTACTS WITH RESPECTIVE SURVEYTYPE
+    Public List<Medallia_Service_Survey__c> getExistingServiceSurveysforContact(Set<Id> conIds,String surveyType, String surveysubType)
+    {
+        List<Medallia_Service_Survey__c> lstofSurvey = new List<Medallia_Service_Survey__c>();
+        if (conIds != null && !conIds.isEmpty())
+        {
+            if(surveyType != null && surveysubType != null)
+            {
+                lstofSurvey = [SELECT Id, ContactId__c,Project_ID__c, Assignment_ID__c,SurveySubType__c,SurveyType__c, Date_Invited__c FROM Medallia_Service_Survey__c
+                               WHERE ContactId__c IN : conIds AND Process_Status__c ='Invited' AND SurveyType__c =: surveyType and SurveySubType__c =: surveysubType];
+            }
+            else if(surveyType != null)
+            {
+                lstofSurvey = [SELECT Id, ContactId__c,Project_ID__c, Assignment_ID__c,SurveySubType__c,SurveyType__c, Date_Invited__c FROM Medallia_Service_Survey__c
+                               WHERE ContactId__c IN : conIds AND Process_Status__c ='Invited' AND SurveyType__c =: surveyType];
+            }
+            else
+            {
+                lstofSurvey = [SELECT Id, ContactId__c,Project_ID__c, Assignment_ID__c,SurveySubType__c,SurveyType__c, Date_Invited__c FROM Medallia_Service_Survey__c
+                               WHERE ContactId__c IN : conIds AND Process_Status__c ='Invited'];
+            }
+        }
+        return lstofSurvey; 
+    }
+    
+    public Map<String, List<pse__Assignment__c>> getTraningAssignments(Set<Id> projectIds)
+    {
+        Map<String,List<pse__Assignment__c>> mapOfAssignment = new Map<String,List<pse__Assignment__c>>();
+        for(pse__Assignment__c assign: [Select id,Resource_Practice_Name__c,pse__Project__c,Milestone_Practice_Name__c from pse__Assignment__c where pse__Project__c IN: projectIds AND pse__Role__c = 'Trainer'])//Milestone_Practice_Name__c
+        {
+            if(mapOfAssignment.containskey(assign.pse__Project__c))
+            {
+                mapOfAssignment.get(assign.pse__Project__c).add(assign);
+            }
+            else
+            {
+                mapOfAssignment.put(assign.pse__Project__c, new List<pse__Assignment__c>{assign});
+            }
+        }
+        return mapOfAssignment;
+    }
+    
+    public List<String> getListOfValues(String values)
+    {
+        List<String> listofValues = new List<String>();
+        if (values != null)
+        {
+            for(String s : values.split(';'))
+            {
+                if(s != null && s != '')
+                {
+                    listofValues.add(s.trim());    
+                }    
+            }    
+        }
+        return listofValues;
+    }
+    
+    public Map<String,String> getMapOfRegions()
+    {
+        Map<String,String> mapOfRegions = new Map<String,String>();
+        mapOfRegions.put('AP','AP');
+        mapOfRegions.put('APAU','APAU');
+        mapOfRegions.put('APCN','APCN');
+        mapOfRegions.put('APSG','APSG');
+        mapOfRegions.put('Breda','Breda');
+        mapOfRegions.put('EMEA','EMEA');
+        mapOfRegions.put('US','US');
+        return mapOfRegions;
+    }
+    
+    public Set<String> getRestrictedEmailDomain(String values)
+    {
+        Set<String> listofValues = new Set<String>();
+        if (values != null)
+        {
+            for (String s : values.split(';'))
+            {
+                if (s != null && s != '')
+                {
+                    listofValues.add('%' + s.trim() + '%');    
+                }    
+            }    
+        }
+        return listofValues;
+    }
+    
+}

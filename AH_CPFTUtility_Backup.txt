@@ -1,0 +1,618 @@
+/***********************************************************************************************
+Name            : AH_CPFTController
+Author          : Bhagwat Garkal
+Created Date    : 04/24/2023
+Last Mod Date   : 04/24/2023
+Last Mod By     : Bhagwat Garkal
+NICC Reference  : 
+Description     : THIS CLASS HAS ALL UTILITY METHODS .  
+:
+************************************************************************************************/
+
+public class AH_CPFTUtility
+{
+    //THIS METHOD IS USED TO CREATE Project RECORDS
+    Public Static String createProject(pse__Proj__c proj)
+    {
+        if(proj != null)
+        {
+            proj.Id = null;
+            proj.pse__Is_Active__c = true;
+            proj.pse__Is_Billable__c = true;
+            proj.Timecards_Require_Approval__c = true;
+            proj.pse__Stage__c = 'Draft';
+            System.debug('proj==>'+proj);
+            insert proj;
+            return proj.Id;    
+        }
+        return null;
+    }
+    
+    //THIS METHOD IS USED TO CREATE PROJECT TASKS & POPULATE THE FIELDS FROM FELD SET
+    Public Static pse__Proj__c generateProjectData(String selectedProjId,pse__Proj__c proj)
+    {
+        try
+        {
+            if(selectedProjId != null)
+            {
+                //QUERY PROJECT TASKS RECORD BASED ON SELECTED PROJECT ID & USE FIELD SET TO GET FIELDS FOR QUERY
+                String queryString = 'select id ';							// OBJECT NAME			FIELD SET NAME		
+                for(Schema.FieldSetMember fld : AH_CPFTUtility.readFieldSet('pse__Proj__c','pse__CreateProjFromTempAltCopyProjectFields'))
+                {
+                    queryString += ', ' + fld.getFieldPath();
+                }
+                queryString += ' from pse__Proj__c where Id =: selectedProjId';
+                
+                List<sObject> insertProjectTasks = new  List<sObject>();
+                for(pse__Proj__c project : Database.query(queryString))
+                {
+                    //Retrieve a map of field API names and values from current record
+                    Map<String, Object> fieldstovalue = project.getPopulatedFieldsAsMap();
+                    
+                    //CREATE NEW OBJECT FOR EACH RETRIVED PROJECT TASK RECORD
+                    
+                    
+                    //populating the required map with field labels as keys and their respective values as map values.
+                    for(String fieldApiName : fieldstovalue.keySet())
+                    {
+                        Object fieldValue = fieldstovalue.get(fieldApiName);
+                        if(fieldApiName != 'Id')
+                        {
+							proj.put(fieldApiName, fieldValue);    
+                        }
+                    }
+				}
+                return proj;
+            }
+        }
+        catch(Exception e)
+        {
+            System.debug('Error:in Create Project:'+e.getMessage()+'-Line-'+e.getLineNumber());
+        }
+        return null;
+    }
+    
+    //THIS METHOD IS USED TO CREATE BUDGET RECORDS
+    Public Static Set<Id> createBudgets(List<pse__Budget__c> budgetList)
+    {
+        Set<Id> budIds = new Set<Id>();
+        if(!budgetList.isEmpty())
+        {
+            Database.SaveResult[] srList = Database.insert(budgetList);
+            // Iterate through each returned result
+            for (Database.SaveResult sr : srList)
+            {
+                if(sr.isSuccess())
+                {
+                    budIds.add(sr.getId());
+                }
+                else
+                {
+                    // Operation failed, so get all errors                
+                    for(Database.Error err : sr.getErrors()) 
+                    {
+                        System.debug(err.getStatusCode() + ': ' + err.getMessage());
+                        System.debug('Budget fields that affected this error: ' + err.getFields());
+                    }
+                }
+            }
+            
+            //UPDATE ASSETS RECORDS WITH ADDED TO PROJECT CHECKBOX AS TRUE FROM NEWLY CREATED BUDGETS
+            if(!budIds.isempty())
+            {
+                Set<Id> assetIds = new set<Id>();
+                for(pse__Budget__c newBud : [Select Id, Asset_Line_Item__c from pse__Budget__c where Id IN :budIds])
+                {
+                    assetIds.add(newBud.Asset_Line_Item__c);    
+                }
+                
+                if(!assetIds.isempty())
+                {
+                    updateAssets(assetIds);    
+                }
+            }
+        }
+        return budIds;
+    }
+    
+    //THIS METHOD IS USED TO get newly created BUDGET RECORDS
+    Public Static List<pse__Budget__c> getBudgets(Set<Id> budIds,Set<String> chargeTypes)
+    {
+        if(!budIds.isEmpty() && !chargeTypes.isEmpty())
+        {
+            return [Select Id,Asset_Line_Item__c,Zuora_Charge_ID__c,Ship_To_Account__c,Charge_Type__c,Asset_Line_Item__r.Apttus_Config2__AttributeValueId__c,
+                    Asset_Line_Item__r.Apttus_Config2__ShipToAccountId__c,Asset_Line_Item__r.SLTC_Zuora_Charge_Number__c,Asset_Line_Item__r.Id,Asset_Line_Item__r.Apttus_Config2__PriceGroup__c,
+                    Asset_Line_Item__r.Apttus_Config2__AttributeValueId__r.SLTC_Package__c,pse__Project__c,pse__Amount__c,pse__Project__r.Opportunity_Number__c,
+                    Asset_Line_Item__r.Apttus_Config2__ProductId__r.SLTC_Is_Super_Bundle__c,Asset_Line_Item__r.Apttus_Config2__ProductId__r.Solution_Domain_Global__c,
+                    Asset_Line_Item__r.Apttus_Config2__OptionId__r.Solution_Domain_Global__c,
+                    Asset_Line_Item__r.Apttus_Config2__OptionId__r.Product_Package__c,Asset_Line_Item__r.Apttus_Config2__OptionId__r.Product_Package__r.Is_Master_Product_Package__c
+                    from pse__Budget__c where Id IN : budIds AND Charge_Type__c IN : chargeTypes];
+        }
+        return null;
+    }
+    
+    //THIS METHOD IS USED TO get newly created BUDGET RECORDS
+    Public Static List<pse__Milestone__c> getMilestonesfromProject(String projId)
+    {
+        if(!String.isblank(projId))
+        {
+            return [Select Id,Name from pse__Milestone__c where pse__Project__c =: projId];
+        }
+        return null;
+    }
+    
+    //THIS METHOD IS USED TO CREATE Subscription  RECORDS
+    Public Static void createSubActivation(List<Subscription_Activation__c> subActivationList)
+    {
+        Set<Id> subIds = new Set<Id>();
+        if(!subActivationList.isEmpty())
+        {
+            Database.SaveResult[] srList = Database.insert(subActivationList);
+            // Iterate through each returned result
+            for (Database.SaveResult sr : srList)
+            {
+                if(sr.isSuccess())
+                {
+                    subIds.add(sr.getId());
+                }
+                else
+                {
+                    // Operation failed, so get all errors                
+                    for(Database.Error err : sr.getErrors()) 
+                    {
+                        System.debug('The following error has occurred.');                    
+                        System.debug(err.getStatusCode() + ': ' + err.getMessage());
+                        System.debug('Subscription Activation fields that affected this error: ' + err.getFields());
+                    }
+                }
+            }
+        }
+        
+        if(!subIds.isEmpty())
+        {
+            Set<Id> assetIds = new set<Id>();
+            for(Subscription_Activation__c newSub : [Select Id, Asset_Line_Item__c from Subscription_Activation__c where Id IN :subIds])
+            {
+                assetIds.add(newSub.Asset_Line_Item__c);    
+            }
+            
+            //UPDATE ASSETS RECORDS WITH ADDED TO PROJECT CHECKBOX AS TRUE FROM NEWLY Subscription Activation
+            if(!assetIds.isEmpty())
+            {
+                updateAssets(assetIds);
+            }
+        }
+    }
+    
+    //THIS METHOD IS USED TO CREATE milestone  RECORDS
+    Public Static void createmilestones(List<pse__Milestone__c> milestoneList)
+    {
+        if(!milestoneList.isEmpty())
+        {
+            insert milestoneList;
+        }
+    }
+    
+    //THIS METHOD IS USED TO CREATE milestone  RECORDS
+    Public Static void updateAssets(Set<id> assetIds)
+    {
+        if(!assetIds.isEmpty())
+        {
+            List<Apttus_Config2__AssetLineItem__c> updateAssets = new  List<Apttus_Config2__AssetLineItem__c>();
+            
+            for(Apttus_Config2__AssetLineItem__c asset : [Select Id,Added_to_Project__c from Apttus_Config2__AssetLineItem__c where Id IN :assetIds AND Added_to_Project__c = false])
+            {
+                asset.Added_to_Project__c = true;
+                updateAssets.add(asset);
+            }
+            if(!updateAssets.isEmpty())
+            {
+                update updateAssets;
+            }
+        }
+    }
+    
+    //THIS METHOD IS USED TO GET CURRENT Opportunity RECORD
+    Public Static Opportunity getCurrentOpportunity(String oppId)
+    {
+        if(oppId != null)
+        {
+            List<Opportunity>lstOppts = [select id,Name,CurrencyIsoCode,OwnerId,AccountId From Opportunity WHERE Id=:oppId];
+            if(lstOppts.size()>0)
+            {
+                return lstOppts[0];
+            }
+        }    
+        return null;
+    }
+    
+    //THIS METHOD IS USED TO GET PROJECT RECORD
+    Public Static pse__Proj__c getProjectRecord(String projId)
+    {
+        if(projId != null)
+        {
+            List<pse__Proj__c> projlst = [select id,Super_Bundle__c,pse__Group__c,pse__Region__c From pse__Proj__c WHERE Id=:projId];
+            if(projlst.size()>0)
+            {
+                return projlst[0];
+            }
+        }    
+        return null;
+    }
+    
+    //THIS METHOD IS USED TO CREATE PROJECT TASKS & POPULATE THE FIELDS FROM FELD SET
+    @Future
+    Public Static Void createProjectTasks(String selectedProjId,String newlyCreatedProjId)
+    {
+        try
+        {
+                if(selectedProjId != null && newlyCreatedProjId != null)
+                {
+                    //QUERY PROJECT TASKS RECORD BASED ON SELECTED PROJECT ID & USE FIELD SET TO GET FIELDS FOR QUERY
+                    String queryString = 'select id ';							// OBJECT NAME			FIELD SET NAME		
+                    for(Schema.FieldSetMember fld : AH_CPFTUtility.readFieldSet('pse__Project_Task__c','AH_CreateProjectFromTemplateCopy'))
+                    {
+                        queryString += ', ' + fld.getFieldPath();
+                    }
+                    queryString += ' from pse__Project_Task__c where pse__Project__c =: selectedProjId';
+                    
+                    List<sObject> insertProjectTasks = new  List<sObject>();
+                    Map<String,List<pse__Project_Task__c>> childProjectTasks = new  Map<String,List<pse__Project_Task__c>>();
+                    for(pse__Project_Task__c pTask : Database.query(queryString))
+                    {
+                        if(pTask.pse__Parent_Task__c != null)
+                        {
+                            if(childProjectTasks.containskey(pTask.pse__Parent_Task__c))
+                            {
+                                childProjectTasks.get(pTask.pse__Parent_Task__c).add(pTask);
+                            }
+                            else
+                            {
+                                childProjectTasks.put(pTask.pse__Parent_Task__c, new list<pse__Project_Task__c>{pTask});    
+                            }
+                        }
+                        else
+                        {    
+                            //Retrieve a map of field API names and values from current record
+                            Map<String, Object> fieldstovalue = pTask.getPopulatedFieldsAsMap();
+                            //CREATE NEW OBJECT FOR EACH RETRIVED PROJECT TASK RECORD
+                            sObject sObj = Schema.getGlobalDescribe().get('pse__Project_Task__c').newSObject();
+                            sObj.put('pse__Project__c', newlyCreatedProjId);
+                            
+                            //populating the required map with field labels as keys and their respective values as map values.
+                            for(String fieldApiName : fieldstovalue.keySet())
+                            {
+                                Object fieldValue = fieldstovalue.get(fieldApiName);
+                                if(fieldApiName != 'Id')
+                                {
+                                    if(fieldApiName != 'pse__Project__c' && fieldApiName != 'pse__Parent_Task__c' && fieldApiName != 'pse__Top_level_Parent_Task__c')
+                                    {
+                                        sObj.put(fieldApiName, fieldValue);    
+                                    }
+                                }
+                            }
+                            
+                            if(sObj != null)
+                            {
+                                insertProjectTasks.add(sObj);    
+                            }
+                       // }    
+                    }
+                    
+                    System.debug('childProjectTasks==>'+childProjectTasks);
+                    System.debug('insertProjectTasks==>'+insertProjectTasks);
+                    System.debug('Record Count==>'+insertProjectTasks.Size());
+                    //INSERT LIST OF PROJECT TASKS RECORDS FOR NEWLY CREATED PROJECT
+                    if(insertProjectTasks != null)
+                    {
+                        Set<Id> newPTIds = new Set<Id>();
+                        Database.SaveResult[] srList = Database.insert(insertProjectTasks);
+                        // Iterate through each returned result
+                        for (Database.SaveResult sr : srList)
+                        {
+                            if(sr.isSuccess())
+                            {
+                                newPTIds.add(sr.getId());
+                            }
+                            else
+                            {
+                                // Operation failed, so get all errors                
+                                for(Database.Error err : sr.getErrors()) 
+                                {
+                                    System.debug('The following error has occurred.');                    
+                                    System.debug(err.getStatusCode() + ': ' + err.getMessage());
+                                    System.debug('fields that affected this error: ' + err.getFields());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        catch(Exception e)
+        {
+            System.debug('Error:in Create Task:'+e.getMessage()+'-Line-'+e.getLineNumber());
+        }
+    }
+    
+    //THIS METHOD IS USED TO Milestone & POPULATE THE FIELDS FROM FELD SET
+    Public Static Void createMilestonefromProject(Set<Id> selectedMLIIds,String newlyCreatedProjId)
+    {
+        try
+        {
+            if(selectedMLIIds != null && newlyCreatedProjId != null)
+            {
+                //QUERY PROJECT TASKS RECORD BASED ON SELECTED PROJECT ID & USE FIELD SET TO GET FIELDS FOR QUERY
+                String queryString = 'select id ';							// OBJECT NAME			FIELD SET NAME		
+                for(Schema.FieldSetMember fld : AH_CPFTUtility.readFieldSet('pse__Milestone__c','pse__CreateProjFromTempAltCopyMilestoneFields'))
+                {
+                    queryString += ', ' + fld.getFieldPath();
+                }
+                queryString += ' from pse__Milestone__c where Id IN: selectedMLIIds';
+                
+                List<sObject> insertMilestones = new  List<sObject>();
+                for(pse__Milestone__c pTask : Database.query(queryString))
+                {
+                    //Retrieve a map of field API names and values from current record
+                    Map<String, Object> fieldstovalue = pTask.getPopulatedFieldsAsMap();
+                    
+                    //CREATE NEW OBJECT FOR EACH RETRIVED PROJECT TASK RECORD
+                    sObject sObj = Schema.getGlobalDescribe().get('pse__Milestone__c').newSObject();
+                    sObj.put('pse__Project__c', newlyCreatedProjId);
+                    
+                    //populating the required map with field labels as keys and their respective values as map values.
+                    for(String fieldApiName : fieldstovalue.keySet())
+                    {
+                        Object fieldValue = fieldstovalue.get(fieldApiName);
+                        if(fieldApiName != 'Id')
+                        {
+                            if(fieldApiName != 'pse__Project__c')
+                                sObj.put(fieldApiName, fieldValue);    
+                        }
+                    }
+                    
+                    if(sObj != null)
+                        insertMilestones.add(sObj);
+                }
+                
+                //INSERT LIST OF PROJECT TASKS RECORDS FOR NEWLY CREATED PROJECT
+                if(insertMilestones != null)
+                {
+                    insert insertMilestones;
+                }
+            }
+        }
+        catch(Exception e)
+        {
+            System.debug('Error:in Create Task:'+e.getMessage()+'-Line-'+e.getLineNumber());
+        }
+    }
+    
+    //THIS METHOD IS USED TO GET FILEDS FROM FIELD SET
+    public static List<Schema.FieldSetMember> readFieldSet(String ObjectName,String fieldSetName)
+    {
+        if(ObjectName != null && fieldSetName != null)
+        {
+            Map<String, Schema.SObjectType> GlobalDescribeMap = Schema.getGlobalDescribe();
+            Schema.SObjectType SObjectTypeObj = GlobalDescribeMap.get(ObjectName);
+            Schema.DescribeSObjectResult DescribeSObjectResultObj = SObjectTypeObj.getDescribe();
+            
+            Schema.FieldSet fieldSetObj = DescribeSObjectResultObj.FieldSets.getMap().get(fieldSetName);
+            return fieldSetObj.getFields();    
+        }
+        return null;
+    }
+    
+    //THIS METHOD IS USED TO GET AssetLineItems FROM Related Opportunity RECORD
+    Public Static LIST<Apttus_Config2__AssetLineItem__c> getAssetsFromRelatedOpportunity(String oppId,Set<String> chargeTypes,Set<String> zuoraOrderTypes)
+    {
+        if(oppId != null && !chargeTypes.isEmpty())
+        {
+            return [Select Id, Name,Added_to_Project__c,Apttus_Config2__ShipToAccountId__c,Apttus_Config2__NetPrice__c,SLTC_Product_Names__c,Apttus_Config2__Quantity__c,Apttus_Config2__OptionId__r.Name,
+                    Apttus_Config2__NetUnitPrice__c,First_Year_Amount__c,Apttus_Config2__ProductId__r.Product_Line__c,SLTC_Product_Code__c,SLTC_Related_Opportunity__r.CurrencyIsoCode,
+                    Apttus_Config2__ProductId__r.Family,Apttus_Config2__ProductId__r.Name,SLTC_Zuora_Subscription_Number__c,SLTC_Related_Opportunity__c,Apttus_Config2__OptionId__c,SLTC_Is_Super_Bundle__c,
+                    Apttus_Config2__ProductId__c,Apttus_Config2__ProductId__r.SLTC_Is_Super_Bundle__c,SLTC_Zuora_Order_Type__c,Apttus_Config2__IsPrimaryLine__c,Apttus_Config2__PriceListItemId__c,
+                    Apttus_Config2__PriceListItemId__r.Needed_in_PSA__c,Apttus_Config2__PriceGroup__c,Apttus_Config2__ProductId__r.Solution_Domain_Global__c,
+                    Apttus_Config2__OptionId__r.Solution_Domain_Global__c,
+                    Opportunity__c,SLTC_Zuora_Charge_Number__c,SLTC_Zuora_Subscription_Id__c,Apttus_Config2__ChargeType__c from Apttus_Config2__AssetLineItem__c
+                    where SLTC_Related_Opportunity__c =:oppId AND Added_to_Project__c = false 
+                    AND SLTC_Zuora_Charge_Number__c != null AND Apttus_Config2__ChargeType__c IN : chargeTypes and SLTC_Zuora_Order_Type__c IN : zuoraOrderTypes];
+        }    
+        return null;
+    }
+    
+
+    
+    //THIS METHOD IS USED TO GET AssetLineItems, Do not have the charge type of “Subscription Fee”, “Service Fee” or “Setup Fee” related to the Opportunity 
+    Public Static LIST<Apttus_Config2__AssetLineItem__c> getAssetsForAdditionalSubscriptions(String oppId,Set<String> chargeTypes,Set<String> zuoraOrderTypes)
+    {
+        if(oppId != null && !chargeTypes.isEmpty())
+        {
+            return [Select Id, Name,Added_to_Project__c,Apttus_Config2__ShipToAccountId__c,Apttus_Config2__NetPrice__c,SLTC_Product_Names__c,Apttus_Config2__Quantity__c,Apttus_Config2__OptionId__r.Name,
+                    Apttus_Config2__NetUnitPrice__c,First_Year_Amount__c,Apttus_Config2__ProductId__r.Product_Line__c,SLTC_Product_Code__c,SLTC_Related_Opportunity__r.CurrencyIsoCode,
+                    Apttus_Config2__ProductId__r.Family,Apttus_Config2__ProductId__r.Name,SLTC_Zuora_Subscription_Number__c,SLTC_Related_Opportunity__c,Apttus_Config2__OptionId__c,SLTC_Is_Super_Bundle__c,
+                    Apttus_Config2__ProductId__c,Apttus_Config2__ProductId__r.SLTC_Is_Super_Bundle__c,SLTC_Zuora_Order_Type__c,Apttus_Config2__IsPrimaryLine__c,Apttus_Config2__PriceListItemId__c,
+                    Apttus_Config2__PriceListItemId__r.Needed_in_PSA__c,Apttus_Config2__PriceGroup__c,Apttus_Config2__ProductId__r.Solution_Domain_Global__c,
+                    Apttus_Config2__OptionId__r.Solution_Domain_Global__c,
+                    Opportunity__c,SLTC_Zuora_Charge_Number__c,SLTC_Zuora_Subscription_Id__c,Apttus_Config2__ChargeType__c from Apttus_Config2__AssetLineItem__c
+                    where SLTC_Related_Opportunity__c =:oppId AND Added_to_Project__c = false 
+                    AND SLTC_Zuora_Charge_Number__c != null AND Apttus_Config2__ChargeType__c NOT IN : chargeTypes and SLTC_Zuora_Order_Type__c IN : zuoraOrderTypes];
+        }    
+        return null;
+    }
+    
+    //THIS METHOD IS USED TO GET PSA_Product_Package_Milestone__c RECORDS
+    Public Static Map<Id,List<PSA_Product_Package_Milestone__c>> getProductPackageMilestone(Set<Id> packageIds)
+    {
+        Map<Id,List<PSA_Product_Package_Milestone__c>> mapOfPPM = new Map<Id,List<PSA_Product_Package_Milestone__c>>();
+        if(!packageIds.isEmpty())
+        {
+            //QUERY PRODUCT PACKAGE MILESTONE BASED ON PRODCUT PACKAGE
+            for(PSA_Product_Package_Milestone__c ppm : [Select Id,Practice__c,Percent__c,Milestone_Name_Prefix__c,Milestone_Type__c,Product__c,Product_Package__c,Product_Package__r.Master_Product_Package__c from PSA_Product_Package_Milestone__c where Product_Package__c IN : packageIds])
+            {
+                if(ppm.Product_Package__c != null)
+                {
+                    if(mapOfPPM != null & mapOfPPM.containskey(ppm.Product_Package__c))
+                    {
+                        mapOfPPM.get(ppm.Product_Package__c).add(ppm);
+                    }
+                    else
+                    {
+                        mapOfPPM.put(ppm.Product_Package__c,new List<PSA_Product_Package_Milestone__c>{ppm});
+                    }    
+                }
+            }
+        }
+        return mapOfPPM;
+    }
+    
+    //THIS METHOD IS USED TO GET PSA_Product_Package_Milestone__c RECORDS from MASTER PACKAGE
+    Public Static Map<Id,List<PSA_Product_Package_Milestone__c>> getMilestonesforMasterPackage(Map<String,String> mapOfPackage)
+    {
+        Map<Id,List<PSA_Product_Package_Milestone__c>> mapOfPPM = new Map<Id,List<PSA_Product_Package_Milestone__c>>();
+        Map<String,Map<String, Object>> mapofAttributeFieldandValue = new Map<String,Map<String, Object>>();
+        Set<String> fieldsForQuery = new Set<String>();
+        Map<String,set<PSA_Product_Package__c>> packageMapwithMaster = new Map<String,set<PSA_Product_Package__c>>();
+        
+        if(mapOfPackage != null)
+        {
+            //QUERY the CHILD PACKAGES FORM MASTER PACKAGES
+            For(PSA_Product_Package__c mpp : [select id,Dimension_1_Field__c,Dimension_1_Value__c,Dimension_2_Field__c,Dimension_2_Value__c,
+                                              Dimension_3_Field__c,Dimension_3_Value__c,Master_Product_Package__c from PSA_Product_Package__c 
+                                              where Master_Product_Package__c IN: mapOfPackage.Values()])
+            {
+                //COLLECTING THE FIELDS FROM DIMENSION FIEDLS TO RETRIVE THE VALUES FROM ATTRIBUTE VALUE OBJECT 
+                if(mpp.Dimension_1_Field__c != null)
+                {
+                    fieldsForQuery.add(mpp.Dimension_1_Field__c);    
+                }
+                
+                if(mpp.Dimension_2_Field__c != null)
+                {
+                    fieldsForQuery.add(mpp.Dimension_2_Field__c);    
+                }
+                
+                if(mpp.Dimension_3_Field__c != null)
+                {
+                    fieldsForQuery.add(mpp.Dimension_3_Field__c);    
+                }
+                
+                //PREPARING THE MAP WITH MASTER & CHILD PACKAGE
+                if(packageMapwithMaster != null & packageMapwithMaster.containskey(mpp.Master_Product_Package__c))
+                {
+                    packageMapwithMaster.get(mpp.Master_Product_Package__c).add(mpp);
+                }
+                else
+                {
+                    packageMapwithMaster.put(mpp.Master_Product_Package__c,new set<PSA_Product_Package__c>{mpp});
+                }  
+            }
+            
+            //QUERY THE Attribute Value Records
+            String queryString = 'Select Id';
+            for(String field : fieldsForQuery)
+            {
+                queryString += ', ' + field;
+            }
+            
+            Set<String> attIds = mapOfPackage.Keyset();
+            queryString += ' from Apttus_Config2__AssetAttributeValue__c where Id IN :attIds';
+            
+            for(Apttus_Config2__AssetAttributeValue__c attribute : Database.query(queryString))
+            {
+                mapofAttributeFieldandValue.put(attribute.Id,attribute.getPopulatedFieldsAsMap());
+            }
+            
+            Map<Id,Id> mapofAttributeandpacIds = new Map<Id,Id>();
+            //CHECK THE CONFIGURED DIMENSION VALUE WITH ATTRIBUTE VALUES CONFIGURED PARTICULAR FIELD
+            for(String attributid : mapOfPackage.keyset())
+            {
+                if(mapofAttributeFieldandValue.containskey(attributid) 
+                   && packageMapwithMaster.containskey(mapOfPackage.get(attributid)))
+                {
+                    for(PSA_Product_Package__c pack : packageMapwithMaster.get(mapOfPackage.get(attributid)))
+                    {
+                        //THIS IS CHECKING IF PRODUCT PACKAGE HAVEING 3 Dimension FIELD CONFIGURED
+                        if(pack.Dimension_1_Field__c != null && pack.Dimension_2_Field__c != null && pack.Dimension_3_Field__c != null)
+                        {
+                            if(mapofAttributeFieldandValue.get(attributid).containskey(pack.Dimension_1_Field__c) && mapofAttributeFieldandValue.get(attributid).containskey(pack.Dimension_2_Field__c)
+                              && mapofAttributeFieldandValue.get(attributid).containskey(pack.Dimension_3_Field__c))
+                            {
+                                if(String.Valueof(mapofAttributeFieldandValue.get(attributid).get(pack.Dimension_1_Field__c)) == String.valueof(pack.Dimension_1_Value__c)
+                                  && String.Valueof(mapofAttributeFieldandValue.get(attributid).get(pack.Dimension_2_Field__c)) == String.valueof(pack.Dimension_2_Value__c)
+                                  && String.valueof(mapofAttributeFieldandValue.get(attributid).get(pack.Dimension_3_Field__c)) == String.valueof(pack.Dimension_3_Value__c))
+                                    mapofAttributeandpacIds.put(pack.Id,attributid);
+                            }
+                        }
+                        else if(pack.Dimension_1_Field__c != null && pack.Dimension_2_Field__c != null)
+                        {
+                            if(mapofAttributeFieldandValue.get(attributid).containskey(pack.Dimension_1_Field__c) && mapofAttributeFieldandValue.get(attributid).containskey(pack.Dimension_2_Field__c))
+                            {
+                                if(String.Valueof(mapofAttributeFieldandValue.get(attributid).get(pack.Dimension_1_Field__c)) == String.valueof(pack.Dimension_1_Value__c)
+                                  && String.Valueof(mapofAttributeFieldandValue.get(attributid).get(pack.Dimension_2_Field__c)) == String.valueof(pack.Dimension_2_Value__c))
+                                    mapofAttributeandpacIds.put(pack.Id,attributid);
+                            }
+                        }
+                       	else if(pack.Dimension_1_Field__c != null && pack.Dimension_3_Field__c != null)
+                        {
+                            if(mapofAttributeFieldandValue.get(attributid).containskey(pack.Dimension_1_Field__c)
+                              && mapofAttributeFieldandValue.get(attributid).containskey(pack.Dimension_3_Field__c))
+                            {
+                                if(String.Valueof(mapofAttributeFieldandValue.get(attributid).get(pack.Dimension_1_Field__c)) == String.valueof(pack.Dimension_1_Value__c)
+                                  && String.valueof(mapofAttributeFieldandValue.get(attributid).get(pack.Dimension_3_Field__c)) == String.valueof(pack.Dimension_3_Value__c))
+                                    mapofAttributeandpacIds.put(pack.Id,attributid);
+                            }
+                        }
+                        else if(pack.Dimension_2_Field__c != null && pack.Dimension_3_Field__c != null)
+                        {
+                            if(mapofAttributeFieldandValue.get(attributid).containskey(pack.Dimension_2_Field__c)
+                              && mapofAttributeFieldandValue.get(attributid).containskey(pack.Dimension_3_Field__c))
+                            {
+                                if(String.Valueof(mapofAttributeFieldandValue.get(attributid).get(pack.Dimension_2_Field__c)) == String.valueof(pack.Dimension_2_Value__c)
+                                  && String.valueof(mapofAttributeFieldandValue.get(attributid).get(pack.Dimension_3_Field__c)) == String.valueof(pack.Dimension_3_Value__c))
+                                    mapofAttributeandpacIds.put(pack.Id,attributid);
+                            }
+                        }
+                       else if( pack.Dimension_1_Field__c != null && mapofAttributeFieldandValue.get(attributid).containskey(pack.Dimension_1_Field__c)
+                           && String.Valueof(mapofAttributeFieldandValue.get(attributid).get(pack.Dimension_1_Field__c)) == String.valueof(pack.Dimension_1_Value__c))
+                        {
+                            mapofAttributeandpacIds.put(pack.Id,attributid);
+                        }
+                        else if(pack.Dimension_2_Field__c != null && mapofAttributeFieldandValue.get(attributid).containskey(pack.Dimension_2_Field__c)
+                                && String.Valueof(mapofAttributeFieldandValue.get(attributid).get(pack.Dimension_2_Field__c)) == String.valueof(pack.Dimension_2_Value__c))
+                        {
+                            mapofAttributeandpacIds.put(pack.Id,attributid);
+                        }
+                        else if(pack.Dimension_3_Field__c != null && mapofAttributeFieldandValue.get(attributid).containskey(pack.Dimension_3_Field__c)
+                                && String.valueof(mapofAttributeFieldandValue.get(attributid).get(pack.Dimension_3_Field__c)) == String.valueof(pack.Dimension_3_Value__c))
+                        {
+                            mapofAttributeandpacIds.put(pack.Id,attributid);
+                        }
+                    }
+                }
+            }
+            
+            if(mapofAttributeandpacIds != null)
+            {
+                //QUERY PRODUCT PACKAGE MILESTONE BASED ON PRODCUT PACKAGE
+                for(PSA_Product_Package_Milestone__c ppm : [Select Id,Practice__c,Percent__c,Milestone_Name_Prefix__c,Milestone_Type__c,Product__c,Product_Package__c,Product_Package__r.Master_Product_Package__c from PSA_Product_Package_Milestone__c where Product_Package__c IN : mapofAttributeandpacIds.keyset()])
+                {
+                    //CREATE MAP FOR ATTRIBUTE VALUE & ITS MATCHED PACKAGE MILESTONES 
+                    if(ppm.Product_Package__c != null && mapofAttributeandpacIds.containskey(ppm.Product_Package__c))
+                    {
+                    	if(ppm.Product_Package__c != null && mapOfPPM.containskey(mapofAttributeandpacIds.get(ppm.Product_Package__c)))
+                        {
+                            mapOfPPM.get(mapofAttributeandpacIds.get(ppm.Product_Package__c)).add(ppm);
+                        }
+                        else
+                        {
+                            mapOfPPM.put(mapofAttributeandpacIds.get(ppm.Product_Package__c),new List<PSA_Product_Package_Milestone__c>{ppm});
+                        }    
+                    }    
+                }
+            }
+        }
+        
+        return mapOfPPM;
+    }
+}
